@@ -1,0 +1,19 @@
+# /root/.config/systemd/user/mt5-bridge.service  (service utilisateur)
+# Modele de reference. Sur le VPS, le script de migration met a jour le
+# fichier existant (chemins uniquement) au lieu de le remplacer.
+# DISPLAY doit correspondre a la session RDP/XFCE ou tourne terminal64.exe.
+[Unit]
+Description=Bridge MT5 mt5linux/RPyC (127.0.0.1:18812)
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/apps/iamrobot/bridge
+Environment=WINEPREFIX=/root/.mt5
+Environment=WINEDEBUG=-all
+Environment=DISPLAY=:10
+ExecStart=/usr/bin/wine python -m mt5linux --host 127.0.0.1 --port 18812 --mode threaded
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=default.target

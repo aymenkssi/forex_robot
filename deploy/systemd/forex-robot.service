@@ -1,0 +1,22 @@
+# /etc/systemd/system/forex-robot.service
+# Modele de reference. Sur le VPS, le script de migration met a jour le
+# fichier existant (chemins uniquement) au lieu de le remplacer.
+[Unit]
+Description=Forex Robot Pro (FastAPI :8001)
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/apps/iamrobot/robot
+Environment=PYTHONUNBUFFERED=1
+Environment=MT5_BRIDGE_HOST=127.0.0.1
+Environment=MT5_BRIDGE_PORT=18812
+ExecStart=/opt/apps/iamrobot/.venv/bin/python /opt/apps/iamrobot/robot/forex_robot.py
+# Le robot s'arrete si le bridge n'est pas pret au demarrage : on relance.
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
