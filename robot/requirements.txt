@@ -1,0 +1,8 @@
+# Dependances Linux du robot (venv /opt/apps/iamrobot/.venv).
+# Versions a figer avec le resultat de `pip freeze` du venv du VPS.
+fastapi
+uvicorn
+pydantic
+numpy
+requests
+mt5linux

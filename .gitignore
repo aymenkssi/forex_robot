@@ -1,0 +1,18 @@
+# Secrets et donnees d'execution (ne jamais publier : depot public)
+robot/config.json
+robot/users.json
+*.tmp
+.env
+*.env
+
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+
+# Binaires Windows du bridge
+bridge/*.exe
+
+# Logs et sauvegardes
+*.log
+backups/

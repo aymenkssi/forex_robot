@@ -1,0 +1,2488 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forex Robot Pro - Control Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f0f0f;
+            color: #e5e5e5;
+        }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+        }
+        .card:hover { border-color: #3a3a3a; }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn-green { background: #10b981; color: white; }
+        .btn-green:hover { background: #059669; }
+        .btn-red { background: #ef4444; color: white; }
+        .btn-red:hover { background: #dc2626; }
+        .btn-blue { background: #3b82f6; color: white; }
+        .btn-blue:hover { background: #2563eb; }
+        .btn-yellow { background: #f59e0b; color: black; }
+        .btn-yellow:hover { background: #d97706; }
+        .btn-gray { background: #374151; color: white; }
+        .btn-gray:hover { background: #4b5563; }
+
+        .profit { color: #10b981; }
+        .loss { color: #ef4444; }
+        .warning { color: #f59e0b; }
+
+        .input-dark {
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 6px;
+            width: 100%;
+        }
+        .input-dark:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #3b82f6);
+            transition: width 0.5s ease;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            font-weight: 600;
+            border: none;
+            background: none;
+            color: #9ca3af;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+        .tab-btn:hover:not(.active) {
+            color: #d1d5db;
+        }
+
+        .impact-high { background: #ef4444; color: white; }
+        .impact-medium { background: #f59e0b; color: black; }
+        .impact-low { background: #6b7280; color: white; }
+
+        .animate-pulse-custom {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #1a1a1a; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 9999;
+            animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+        }
+        .toast-success { background: #10b981; }
+        .toast-error { background: #ef4444; }
+        .toast-warning { background: #f59e0b; color: black; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+    
+/* ===== V2 PROFESSIONAL TRADING DASHBOARD ===== */
+.status-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.status-chip{background:#141414;border:1px solid #292929;border-radius:8px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;font-size:12px}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px}
+.dot-ok{background:#10b981;box-shadow:0 0 9px #10b981}.dot-bad{background:#ef4444;box-shadow:0 0 9px #ef4444}.dot-warn{background:#f59e0b}
+.hero-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;margin-bottom:14px}
+.hero-card{position:relative;overflow:hidden;border:1px solid #303030;background:linear-gradient(145deg,#1b1b1b,#121212)}
+.hero-glow{position:absolute;inset:auto -80px -120px auto;width:260px;height:260px;border-radius:50%;background:#3b82f6;opacity:.08;filter:blur(45px)}
+.decision-action{font-size:clamp(28px,4vw,46px);font-weight:800;letter-spacing:.04em}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.metric-box{background:#111;border:1px solid #272727;border-radius:7px;padding:10px}
+.signal-buy{color:#34d399}.signal-sell{color:#f87171}.signal-neutral{color:#9ca3af}
+.conf-ring{width:94px;height:94px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#3b82f6 var(--confidence,0%),#262626 0);position:relative}
+.conf-ring:after{content:"";position:absolute;inset:7px;background:#171717;border-radius:50%}
+.conf-ring span{position:relative;z-index:1;font-weight:800;font-size:18px}
+.opportunity-row{display:grid;grid-template-columns:1.2fr .9fr .7fr .7fr .8fr auto;gap:8px;align-items:center;padding:11px 12px;border-bottom:1px solid #292929}
+.opportunity-row:last-child{border-bottom:0}.opportunity-row:hover{background:#202020}
+.badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:800}
+.badge-green{background:#10b9811a;color:#34d399;border:1px solid #10b98133}
+.badge-red{background:#ef44441a;color:#f87171;border:1px solid #ef444433}
+.badge-yellow{background:#f59e0b1a;color:#fbbf24;border:1px solid #f59e0b33}
+.ai-mini{border-left:3px solid #8b5cf6;background:#8b5cf610}
+.activity-log{max-height:260px;overflow:auto}.log-line{font-family:'JetBrains Mono',monospace;font-size:11px;padding:7px 0;border-bottom:1px solid #242424}
+.market-open{color:#34d399}.market-closed{color:#f87171}
+.section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.section-title h3{font-size:15px;font-weight:800}
+@media(max-width:900px){.hero-grid{grid-template-columns:1fr}.status-strip{grid-template-columns:repeat(2,1fr)}.metric-grid{grid-template-columns:repeat(2,1fr)}.opportunity-row{grid-template-columns:1fr 1fr 1fr}.opportunity-row>*:nth-child(n+4){display:none}}
+@media(max-width:520px){.status-strip{grid-template-columns:1fr 1fr}.metric-grid{grid-template-columns:1fr 1fr}.opportunity-row{grid-template-columns:1fr 1fr}}
+
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="auth-screen" class="fixed inset-0 z-[10000] bg-[#0f0f0f] flex items-center justify-center p-4">
+        <div class="card p-6 w-full max-w-md">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-lock text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold">FOREX ROBOT PRO</h2>
+                    <p class="text-gray-500 text-sm">Accès sécurisé</p>
+                </div>
+            </div>
+            <label class="block text-gray-400 text-sm mb-2">Utilisateur</label>
+            <input id="auth-username" class="input-dark mb-4" autocomplete="username">
+            <label class="block text-gray-400 text-sm mb-2">Mot de passe</label>
+            <input id="auth-password" type="password" class="input-dark mb-4" autocomplete="current-password">
+            <button onclick="loginUser()" class="btn btn-blue w-full">SE CONNECTER</button>
+            <div id="auth-error" class="text-red-400 text-sm mt-3"></div>
+            <div id="auth-init-hint" class="text-yellow-400 text-xs mt-4 hidden">
+                Authentification non initialisée. L'administrateur doit créer les comptes.
+            </div>
+        </div>
+    </div>
+
+    <div id="session-bar" class="hidden fixed top-3 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-xs">
+        <span id="session-user" class="font-bold"></span>
+        <span id="session-role" class="ml-2"></span>
+        <button onclick="logoutUser()" class="ml-4 text-red-400 hover:text-red-300">Déconnexion</button>
+    </div>
+
+    <div class="max-w-7xl mx-auto p-4 md:p-6">
+
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-robot text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold">FOREX ROBOT PRO</h1>
+                    <p class="text-gray-500 text-sm">Mode Sniper - Analyse Multi-Paires</p>
+                </div>
+            </div>
+            <div id="connection-status" class="flex items-center gap-3 bg-red-500/20 px-4 py-2 rounded-lg">
+                <span class="w-3 h-3 rounded-full bg-red-500 animate-pulse-custom"></span>
+                <span class="text-red-400 font-medium">Deconnecte</span>
+            </div>
+        </div>
+
+
+        <!-- ===== V4 PROFESSIONAL DASHBOARD + AI PORTFOLIO ===== -->
+        <div class="status-strip">
+            <div class="status-chip"><span><span id="mt5-dot" class="status-dot dot-bad"></span>MT5</span><b id="mt5-status">OFFLINE</b></div>
+            <div class="status-chip"><span><span id="bridge-dot" class="status-dot dot-bad"></span>BRIDGE</span><b id="bridge-status">UNKNOWN</b></div>
+            <div class="status-chip"><span><span id="ai-dot" class="status-dot dot-bad"></span>OLLAMA</span><b id="ai-top-status">OFFLINE</b></div>
+            <div class="status-chip"><span><span id="market-dot" class="status-dot dot-warn"></span>MARCHÉ</span><b id="market-status">VÉRIFICATION</b></div>
+        </div>
+
+        <div class="hero-grid">
+            <div class="card hero-card p-6">
+                <div class="hero-glow"></div>
+                <div class="section-title">
+                    <h3><i class="fas fa-crosshairs text-blue-400 mr-2"></i>DECISION ENGINE</h3>
+                    <span id="decision-time" class="text-xs text-gray-500 mono">--:--:--</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 items-center">
+                    <div>
+                        <div class="text-gray-500 text-xs mb-1">MEILLEURE OPPORTUNITÉ</div>
+                        <div id="decision-symbol" class="text-3xl font-bold mono">---</div>
+                        <div id="decision-action" class="decision-action signal-neutral mt-1">HOLD</div>
+                        <div id="decision-reason" class="text-gray-400 text-sm mt-2">Lance une analyse pour obtenir une décision.</div>
+                    </div>
+                    <div class="flex justify-center">
+                        <div id="decision-confidence-ring" class="conf-ring" style="--confidence:0%">
+                            <span id="decision-confidence">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="metric-grid mt-5">
+                    <div class="metric-box"><div class="text-gray-500 text-xs">SCORE</div><div id="decision-score" class="mono font-bold text-lg">0</div></div>
+                    <div class="metric-box"><div class="text-gray-500 text-xs">RSI</div><div id="decision-rsi" class="mono font-bold text-lg">--</div></div>
+                    <div class="metric-box"><div class="text-gray-500 text-xs">TENDANCE</div><div id="decision-trend" class="font-bold">--</div></div>
+                    <div class="metric-box"><div class="text-gray-500 text-xs">IA</div><div id="decision-ai" class="font-bold">--</div></div>
+                </div>
+                <div id="decision-checks" class="flex flex-wrap gap-2 mt-4"></div>
+                <button onclick="runFullAIAnalysis()" class="btn btn-blue mt-4 w-full md:w-auto">
+                    <i class="fas fa-bolt mr-2"></i>ANALYSE TECHNIQUE + IA
+                </button>
+            </div>
+
+            <div class="card p-6">
+                <div class="section-title">
+                    <h3><i class="fas fa-brain text-purple-400 mr-2"></i>IA MISTRAL</h3>
+                    <span id="ai-model-badge" class="badge badge-yellow">CHECK</span>
+                </div>
+                <div class="space-y-3">
+                    <div class="flex justify-between"><span class="text-gray-500">Sentiment</span><b id="top-ai-sentiment">--</b></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Score IA</span><b id="top-ai-score" class="mono">--</b></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Risque</span><b id="top-ai-risk">--</b></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Horizon</span><b id="top-ai-timeframe">--</b></div>
+                    <div class="ai-mini rounded-lg p-3 mt-3">
+                        <div class="text-xs text-gray-500 mb-1">RECOMMANDATION</div>
+                        <div id="top-ai-recommendation" class="font-bold text-sm">Aucune analyse</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5 mb-6">
+            <div class="section-title">
+                <h3><i class="fas fa-ranking-star text-yellow-400 mr-2"></i>TOP OPPORTUNITÉS</h3>
+                <button onclick="runAnalysis()" class="btn btn-gray text-xs py-2"><i class="fas fa-sync mr-1"></i>Actualiser</button>
+            </div>
+            <div class="hidden md:grid opportunity-row text-gray-500 text-xs font-bold">
+                <span>PAIRE</span><span>SIGNAL</span><span>SCORE</span><span>CONF.</span><span>RSI</span><span></span>
+            </div>
+            <div id="top-opportunities">
+                <div class="text-gray-500 text-center py-5">Analyse non lancée</div>
+            </div>
+        </div>
+
+
+        <!-- ===== V4 AI PORTFOLIO CONTEXT ===== -->
+        <div class="card p-5 mb-6" style="border-color:#6d28d9;">
+            <div class="section-title">
+                <h3><i class="fas fa-brain text-purple-400 mr-2"></i>CONTEXTE PORTEFEUILLE IA</h3>
+                <span id="portfolio-ai-badge" class="badge badge-purple">IA ACTIVE</span>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div class="metric-box">
+                    <div class="text-gray-500 text-xs">POSITIONS</div>
+                    <div id="portfolio-position-count" class="mono font-bold text-lg">0 / 1</div>
+                </div>
+                <div class="metric-box">
+                    <div class="text-gray-500 text-xs">PLACES RESTANTES</div>
+                    <div id="portfolio-remaining" class="mono font-bold text-lg text-green-400">1</div>
+                </div>
+                <div class="metric-box">
+                    <div class="text-gray-500 text-xs">PROFIT PORTEFEUILLE</div>
+                    <div id="portfolio-profit" class="mono font-bold text-lg text-green-400">$0.00</div>
+                </div>
+                <div class="metric-box">
+                    <div class="text-gray-500 text-xs">RISQUE IA</div>
+                    <div id="portfolio-risk" class="font-bold text-lg">--</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="bg-gray-900/70 rounded-lg p-4">
+                    <div class="text-gray-500 text-xs mb-2">POSITIONS OUVERTES</div>
+                    <div id="portfolio-positions-list" class="space-y-2">
+                        <span class="text-gray-600">Aucune position</span>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900/70 rounded-lg p-4">
+                    <div class="text-gray-500 text-xs mb-2">EXPOSITION DEVISES</div>
+                    <div id="portfolio-exposure" class="space-y-2">
+                        <span class="text-gray-600">Aucune exposition</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="portfolio-ai-decision"
+                 class="mt-3 rounded-lg p-3 border border-purple-500/30 bg-purple-500/10 text-sm text-gray-300">
+                L'IA prendra en compte les positions existantes, Max Positions et l'exposition avant une décision.
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+            <div class="card p-4">
+                <div class="text-gray-500 text-xs font-medium mb-1">BALANCE</div>
+                <div id="balance" class="text-xl font-bold mono">$0.00</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-gray-500 text-xs font-medium mb-1">EQUITY</div>
+                <div id="equity" class="text-xl font-bold mono">$0.00</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-gray-500 text-xs font-medium mb-1">PROFIT ACTUEL</div>
+                <div id="current-profit" class="text-xl font-bold mono">$0.00</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-gray-500 text-xs font-medium mb-1">OBJECTIF</div>
+                <div id="target-display" class="text-xl font-bold mono text-blue-400">$20.00</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-gray-500 text-xs font-medium mb-1">AUTO TRADING</div>
+                <div id="auto-status" class="text-xl font-bold">OFF</div>
+            </div>
+        </div>
+
+        <!-- Positions Actives -->
+        <div id="position-card" class="card p-5 mb-6 hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i class="fas fa-chart-line text-blue-400"></i>
+                    POSITIONS ACTIVES
+                    <span id="active-position-count" class="badge badge-yellow">0</span>
+                </h2>
+                <span id="active-position-pnl" class="mono font-bold">$0.00</span>
+            </div>
+            <div id="active-positions-list" class="space-y-3"></div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-800 mb-6 overflow-x-auto">
+            <button onclick="showTab('controls')" class="tab-btn active" data-tab="controls">
+                <i class="fas fa-gamepad mr-2"></i>Controles
+            </button>
+            <button onclick="showTab('settings')" class="tab-btn" data-tab="settings" data-admin-only="true">
+                <i class="fas fa-cog mr-2"></i>Parametres
+            </button>
+            <button onclick="showTab('calendar')" class="tab-btn" data-tab="calendar">
+                <i class="fas fa-calendar mr-2"></i>Calendrier
+            </button>
+            <button onclick="showTab('analysis')" class="tab-btn" data-tab="analysis">
+                <i class="fas fa-chart-bar mr-2"></i>Analyse
+            </button>
+            <button onclick="showTab('history')" class="tab-btn" data-tab="history">
+                <i class="fas fa-clock-rotate-left mr-2"></i>Historique
+            </button>
+            <button onclick="showTab('manual')" class="tab-btn" data-tab="manual" data-admin-only="true">
+                <i class="fas fa-hand-pointer mr-2"></i>Manuel
+            </button>
+            <button onclick="showTab('ai')" class="tab-btn" data-tab="ai">
+                <i class="fas fa-brain mr-2"></i>IA News
+            </button>
+            <button onclick="showTab('telegram')" class="tab-btn" data-tab="telegram">
+                <i class="fab fa-telegram mr-2"></i>Telegram
+            </button>
+        </div>
+
+        <!-- Tab Contents -->
+        <div id="tab-controls" class="tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Auto Trading Controls -->
+                <div class="card p-5">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-robot text-green-400"></i>
+                        Trading Automatique
+                    </h3>
+                    <div class="space-y-4">
+                        <button onclick="startAutoTrading()" data-admin-only="true" class="btn btn-green w-full text-lg py-4">
+                            <i class="fas fa-play mr-2"></i>DEMARRER
+                        </button>
+                        <button onclick="stopAutoTrading()" data-admin-only="true" class="btn btn-red w-full text-lg py-4">
+                            <i class="fas fa-stop mr-2"></i>ARRETER
+                        </button>
+                        <button onclick="refreshData()" class="btn btn-gray w-full">
+                            <i class="fas fa-sync mr-2"></i>Actualiser
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="card p-5">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-info-circle text-blue-400"></i>
+                        Configuration Active
+                    </h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray-400">Lot Size</span>
+                            <span id="config-lot" class="mono font-bold">0.1</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray-400">Objectif Profit</span>
+                            <span id="config-target" class="mono font-bold profit">$20</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray-400">Stop Loss</span>
+                            <span id="config-sl" class="mono font-bold loss">$50</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray-400">Indicateurs</span>
+                            <span id="config-impacts" class="font-bold">HIGH, MEDIUM</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray-400">Score Minimum</span>
+                            <span id="config-score" class="mono font-bold">3</span>
+                        </div>
+                        <div class="flex justify-between py-2">
+                            <span class="text-gray-400">Max Positions</span>
+                            <span id="config-maxpos" class="mono font-bold text-purple-400">1</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-settings" class="tab-content hidden">
+            <div class="card p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h3 class="text-xl font-bold flex items-center gap-2">
+                            <i class="fas fa-sliders-h text-yellow-400"></i>
+                            Paramètres du Robot
+                        </h3>
+                        <p class="text-gray-500 text-sm mt-1">Tous les paramètres ci-dessous sont chargés depuis le serveur et sauvegardés dans config.json.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <span id="config-sync-badge" class="badge badge-yellow">CHARGEMENT...</span>
+                        <span id="config-last-sync" class="text-xs text-gray-500 mono">--</span>
+                    </div>
+                </div>
+
+                <div id="config-load-warning" class="hidden mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300"></div>
+
+                <!-- TRADING -->
+                <div class="mb-8">
+                    <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-line text-green-400"></i>Trading</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div><label class="block text-gray-400 text-sm mb-2">Taille du lot</label><input type="number" id="setting-lot" step="0.01" min="0.01" max="10" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0.01 à 10 lots</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Objectif Profit ($)</label><input type="number" id="setting-target" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Objectif de fermeture par position</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Stop Loss monétaire ($)</label><input type="number" id="setting-sl" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (le SL broker ATR reste indépendant)</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Score minimum</label><input type="number" id="setting-score" min="1" max="10" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Score technique requis</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Intervalle d'analyse (s)</label><input type="number" id="setting-interval" min="10" max="600" step="5" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Fréquence du cycle automatique</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Max positions</label><input type="number" id="setting-maxpos" min="1" max="20" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond fonctionnel, borné par le hard max</p></div>
+                    </div>
+                </div>
+
+                <!-- ECONOMIC IMPACT -->
+                <div class="mb-8">
+                    <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-filter text-purple-400"></i>Niveaux d'impact économique</h4>
+                    <div class="flex flex-wrap gap-4">
+                        <label class="flex items-center gap-3 cursor-pointer bg-gray-800 px-4 py-3 rounded-lg"><input type="checkbox" id="impact-high" class="w-5 h-5 rounded"><span class="px-3 py-1 rounded text-sm font-bold impact-high">HIGH</span><span class="text-gray-400">Impact fort</span></label>
+                        <label class="flex items-center gap-3 cursor-pointer bg-gray-800 px-4 py-3 rounded-lg"><input type="checkbox" id="impact-medium" class="w-5 h-5 rounded"><span class="px-3 py-1 rounded text-sm font-bold impact-medium">MEDIUM</span><span class="text-gray-400">Impact moyen</span></label>
+                        <label class="flex items-center gap-3 cursor-pointer bg-gray-800 px-4 py-3 rounded-lg"><input type="checkbox" id="impact-low" class="w-5 h-5 rounded"><span class="px-3 py-1 rounded text-sm font-bold impact-low">LOW</span><span class="text-gray-400">Impact faible</span></label>
+                    </div>
+                </div>
+
+                <!-- RSI / SMA -->
+                <div class="mb-8">
+                    <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-area text-cyan-400"></i>Indicateurs techniques</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <div><label class="block text-gray-400 text-sm mb-2">RSI période</label><input type="number" id="setting-rsi-period" min="5" max="50" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">RSI survente</label><input type="number" id="setting-rsi-oversold" min="5" max="49" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">RSI surachat</label><input type="number" id="setting-rsi-overbought" min="6" max="95" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">SMA rapide</label><input type="number" id="setting-sma-fast" min="2" max="200" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">SMA lente</label><input type="number" id="setting-sma-slow" min="3" max="300" step="1" class="input-dark mono"></div>
+                    </div>
+                </div>
+
+                <!-- RISK ENGINE -->
+                <div class="mb-8 border border-red-500/20 rounded-lg p-5 bg-red-500/5">
+                    <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-shield-halved text-red-400"></i>Risk Engine</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div><label class="block text-gray-400 text-sm mb-2">Hard max positions</label><input type="number" id="setting-hard-maxpos" min="1" max="20" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond de sécurité global</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Exposition max / devise</label><input type="number" id="setting-max-exposure" min="1" max="10" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Exposition nette maximale</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Cooldown même paire (min)</label><input type="number" id="setting-trade-cooldown" min="0" max="1440" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Spread maximum (points)</label><input type="number" id="setting-max-spread" min="0" max="1000" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">DD : bloquer nouvelles entrées (%)</label><input type="number" id="setting-dd-new" min="0" max="100" step="0.1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">DD : arrêt automatique (%)</label><input type="number" id="setting-dd-stop" min="0" max="100" step="0.1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Blackout news HIGH (min)</label><input type="number" id="setting-news-blackout" min="0" max="240" step="1" class="input-dark mono"></div>
+                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">SL broker obligatoire</div><div class="text-xs text-gray-500">Refuse toute ouverture sans SL MT5</div></div><input type="checkbox" id="setting-broker-sl" class="w-5 h-5 rounded"></div>
+                    </div>
+                </div>
+
+                <!-- MTF / ATR -->
+                <div class="mb-8 border border-blue-500/20 rounded-lg p-5 bg-blue-500/5">
+                    <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-layer-group text-blue-400"></i>Multi-Timeframe / ATR</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div><label class="block text-gray-400 text-sm mb-2">Barres M15 minimum</label><input type="number" id="setting-m15-bars" min="50" max="500" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Barres M5 minimum</label><input type="number" id="setting-m5-bars" min="50" max="500" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Période ATR</label><input type="number" id="setting-atr-period" min="5" max="100" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">ATR × SL</label><input type="number" id="setting-atr-sl" min="0.1" max="10" step="0.1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">ATR × TP</label><input type="number" id="setting-atr-tp" min="0.1" max="20" step="0.1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Break-even à (R)</label><input type="number" id="setting-breakeven" min="0.1" max="10" step="0.1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Trailing à (R)</label><input type="number" id="setting-trailing-trigger" min="0.1" max="20" step="0.1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Trailing ATR ×</label><input type="number" id="setting-trailing-atr" min="0.1" max="10" step="0.1" class="input-dark mono"></div>
+                    </div>
+                </div>
+
+                <!-- AI / OLLAMA -->
+                <div class="mb-8 border border-purple-500/20 rounded-lg p-5 bg-purple-500/5">
+                    <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-brain text-purple-400"></i>IA / Ollama</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">Activer l'IA</div><div class="text-xs text-gray-500">Validation des trades + analyses</div></div><input type="checkbox" id="setting-ai-enabled" class="w-5 h-5 rounded"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Score minimum IA</label><input type="number" id="setting-ai-score" min="1" max="10" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Cooldown IA (s)</label><input type="number" id="setting-ai-cooldown" min="0" max="3600" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">QUICK tokens max</label><input type="number" id="setting-ai-quick-tokens" min="16" max="512" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">QUICK timeout (s)</label><input type="number" id="setting-ai-quick-timeout" min="5" max="180" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">FULL tokens max</label><input type="number" id="setting-ai-full-tokens" min="32" max="1024" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">FULL timeout (s)</label><input type="number" id="setting-ai-full-timeout" min="10" max="300" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Keep Alive</label><input type="text" id="setting-ai-keepalive" class="input-dark mono" placeholder="60s"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Modèle Ollama</label><input type="text" id="setting-ollama-model" class="input-dark mono"></div>
+                        <div class="md:col-span-2 lg:col-span-3"><label class="block text-gray-400 text-sm mb-2">URL Ollama</label><input type="text" id="setting-ollama-url" class="input-dark mono"></div>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex flex-col md:flex-row gap-3">
+                    <button onclick="saveConfig()" data-admin-only="true" class="btn btn-blue"><i class="fas fa-save mr-2"></i>Sauvegarder Configuration</button>
+                    <button onclick="loadConfigFromServer(true)" data-admin-only="true" class="btn btn-gray"><i class="fas fa-cloud-arrow-down mr-2"></i>Recharger depuis le serveur</button>
+                    <button onclick="resetConfig()" data-admin-only="true" class="btn btn-gray"><i class="fas fa-undo mr-2"></i>Restaurer configuration serveur</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-calendar" class="tab-content hidden">
+            <div class="card p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                    <h3 class="text-xl font-bold flex items-center gap-2">
+                        <i class="fas fa-calendar-alt text-orange-400"></i>
+                        Calendrier Economique
+                    </h3>
+                    <div class="flex items-center gap-4">
+                        <div>
+                            <label class="text-gray-400 text-sm mr-2">Jusqu'au:</label>
+                            <input type="date" id="calendar-end-date" class="input-dark" style="width:auto">
+                        </div>
+                        <button onclick="loadCalendar()" class="btn btn-blue">
+                            <i class="fas fa-sync mr-2"></i>Actualiser
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-6">
+                    <button onclick="filterCalendar('all')" class="btn btn-blue text-sm filter-btn" data-filter="all">
+                        Tous
+                    </button>
+                    <button onclick="filterCalendar('high')" class="btn btn-gray text-sm filter-btn" data-filter="high">
+                        <span class="w-2 h-2 rounded-full bg-red-500 inline-block mr-2"></span>HIGH
+                    </button>
+                    <button onclick="filterCalendar('medium')" class="btn btn-gray text-sm filter-btn" data-filter="medium">
+                        <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block mr-2"></span>MEDIUM
+                    </button>
+                    <button onclick="filterCalendar('low')" class="btn btn-gray text-sm filter-btn" data-filter="low">
+                        <span class="w-2 h-2 rounded-full bg-gray-500 inline-block mr-2"></span>LOW
+                    </button>
+                </div>
+
+                <div id="calendar-list" class="space-y-2 max-h-[600px] overflow-y-auto scrollbar-thin">
+                    <div class="text-gray-500 text-center py-8">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
+                        <p>Chargement du calendrier...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-analysis" class="tab-content hidden">
+            <div class="card p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-bold flex items-center gap-2">
+                        <i class="fas fa-microscope text-purple-400"></i>
+                        Analyse des Marches
+                    </h3>
+                    <button onclick="runAnalysis()" class="btn btn-blue">
+                        <i class="fas fa-search mr-2"></i>Analyser Maintenant
+                    </button>
+                </div>
+                <div id="analysis-result" class="space-y-4">
+                    <div class="text-gray-500 text-center py-8">
+                        <i class="fas fa-chart-pie text-4xl mb-4 block"></i>
+                        <p>Cliquez sur "Analyser Maintenant" pour voir les opportunites</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-history" class="tab-content hidden">
+            <div class="card p-6">
+                <div class="section-title">
+                    <h3><i class="fas fa-clock-rotate-left text-cyan-400 mr-2"></i>HISTORIQUE DES POSITIONS</h3>
+                    <span id="history-status" class="text-xs text-gray-500">--</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="block text-gray-400 text-sm mb-2">Date début</label>
+                        <input type="date" id="history-from" class="input-dark">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 text-sm mb-2">Date fin</label>
+                        <input type="date" id="history-to" class="input-dark">
+                    </div>
+                    <div class="flex items-end">
+                        <label class="flex items-center gap-3 text-sm text-gray-300 cursor-pointer mb-2">
+                            <input type="checkbox" id="history-since-beginning" class="w-5 h-5">
+                            <span>Depuis le début de l'historique</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-3 mb-5">
+                    <button onclick="loadTradeHistory()" class="btn btn-blue">
+                        <i class="fas fa-search mr-2"></i>Afficher
+                    </button>
+                    <button onclick="setHistoryPeriod(7)" class="btn btn-gray text-sm">7 jours</button>
+                    <button onclick="setHistoryPeriod(30)" class="btn btn-gray text-sm">30 jours</button>
+                    <button onclick="setHistoryPeriod(90)" class="btn btn-gray text-sm">90 jours</button>
+                    <button onclick="setHistorySinceBeginning()" class="btn btn-gray text-sm">Depuis le début</button>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                    <div class="metric-box"><div class="text-gray-500 text-xs">TRADES</div><div id="history-count" class="mono font-bold text-lg">0</div></div>
+                    <div class="metric-box"><div class="text-gray-500 text-xs">GAINS</div><div id="history-wins" class="mono font-bold text-lg text-green-400">0</div></div>
+                    <div class="metric-box"><div class="text-gray-500 text-xs">PERTES</div><div id="history-losses" class="mono font-bold text-lg text-red-400">0</div></div>
+                    <div class="metric-box"><div class="text-gray-500 text-xs">PNL NET</div><div id="history-total" class="mono font-bold text-lg">$0.00</div></div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-gray-500 border-b border-gray-800">
+                                <th class="py-3 pr-3">OUVERTURE</th>
+                                <th class="py-3 pr-3">FERMETURE</th>
+                                <th class="py-3 pr-3">PAIRE</th>
+                                <th class="py-3 pr-3">TYPE</th>
+                                <th class="py-3 pr-3">VOLUME</th>
+                                <th class="py-3 pr-3">PRIX OUV.</th>
+                                <th class="py-3 pr-3">PRIX FER.</th>
+                                <th class="py-3 pr-3">GAIN/PERTES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <tr><td colspan="8" class="text-center text-gray-500 py-8">Choisissez une période puis cliquez sur Afficher.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-manual" class="tab-content hidden">
+            <div class="card p-6">
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                    <i class="fas fa-hand-pointer text-pink-400"></i>
+                    Trading Manuel
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Symbole</label>
+                            <select id="manual-symbol" class="input-dark">
+                                <option value="EURUSD">EURUSD</option>
+                                <option value="GBPUSD">GBPUSD</option>
+                                <option value="USDJPY">USDJPY</option>
+                                <option value="USDCHF">USDCHF</option>
+                                <option value="AUDUSD">AUDUSD</option>
+                                <option value="USDCAD">USDCAD</option>
+                                <option value="NZDUSD">NZDUSD</option>
+                                <option value="EURGBP">EURGBP</option>
+                                <option value="EURJPY">EURJPY</option>
+                                <option value="GBPJPY">GBPJPY</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Volume (Lots)</label>
+                            <input type="number" id="manual-volume" step="0.01" min="0.01" value="0.1" class="input-dark mono">
+                        </div>
+                    </div>
+                    <div class="flex flex-col justify-end gap-4">
+                        <button onclick="manualTrade('BUY')" data-admin-only="true" class="btn btn-green text-xl py-6">
+                            <i class="fas fa-arrow-up mr-2"></i>BUY
+                        </button>
+                        <button onclick="manualTrade('SELL')" data-admin-only="true" class="btn btn-red text-xl py-6">
+                            <i class="fas fa-arrow-down mr-2"></i>SELL
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-6 mt-6">
+                <h3 class="text-lg font-bold mb-4">Positions Ouvertes</h3>
+                <div id="positions-list" class="space-y-2">
+                    <div class="text-gray-500">Aucune position</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB IA NEWS -->
+        <div id="tab-ai" class="tab-content hidden">
+            <!-- AI Status -->
+            <div id="ai-status-card" class="card p-5 mb-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-brain text-purple-400 text-xl"></i>
+                        <div>
+                            <h3 class="font-bold">Ollama - IA Locale</h3>
+                            <p id="ai-status-text" class="text-gray-500 text-sm">Verification...</p>
+                        </div>
+                    </div>
+                    <div id="ai-status-badge" class="px-3 py-1 rounded-full text-sm font-bold bg-gray-700">
+                        ...
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Analyse manuelle d'une news -->
+                <div class="card p-6">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-newspaper text-orange-400"></i>
+                        Analyser une News
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Titre / Headline</label>
+                            <input type="text" id="ai-headline" placeholder="Ex: Fed raises interest rates by 25bps"
+                                   class="input-dark">
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Details (optionnel)</label>
+                            <textarea id="ai-content" rows="3" placeholder="Details supplementaires..."
+                                      class="input-dark" style="resize:vertical"></textarea>
+                        </div>
+                        <button onclick="analyzeNews()" class="btn btn-blue w-full">
+                            <i class="fas fa-robot mr-2"></i>Analyser avec IA
+                        </button>
+                    </div>
+
+                    <!-- Resultat analyse news -->
+                    <div id="ai-news-result" class="mt-4 hidden">
+                    </div>
+                </div>
+
+                <!-- Analyse complete automatique -->
+                <div class="card p-6">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-magic text-cyan-400"></i>
+                        Analyse Complete (Tech + IA)
+                    </h3>
+                    <p class="text-gray-500 text-sm mb-4">
+                        Combine l'analyse technique des 28 paires, le calendrier economique et l'IA pour une recommandation optimale.
+                    </p>
+                    <button onclick="runFullAIAnalysis()" class="btn btn-green w-full text-lg py-4">
+                        <i class="fas fa-bolt mr-2"></i>Lancer Analyse Complete
+                    </button>
+
+                    <div id="ai-full-result" class="mt-4">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB TELEGRAM -->
+        <div id="tab-telegram" class="tab-content hidden">
+            <!-- Status -->
+            <div id="tg-status-card" class="card p-5 mb-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <i class="fab fa-telegram text-blue-400 text-2xl"></i>
+                        <div>
+                            <h3 class="font-bold">Alertes Telegram</h3>
+                            <p id="tg-status-text" class="text-gray-500 text-sm">Non configure</p>
+                        </div>
+                    </div>
+                    <div id="tg-status-badge" class="px-3 py-1 rounded-full text-sm font-bold bg-gray-700">OFF</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Configuration -->
+                <div class="card p-6">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-key text-yellow-400"></i>
+                        Configuration du Bot
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Bot Token</label>
+                            <input type="password" id="tg-token" placeholder="7123456789:AAHx..."
+                                   class="input-dark mono text-sm" data-admin-only="true">
+                            <p class="text-gray-600 text-xs mt-1">Obtenu via @BotFather sur Telegram</p>
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Chat ID</label>
+                            <input type="text" id="tg-chatid" placeholder="123456789"
+                                   class="input-dark mono text-sm" data-admin-only="true">
+                            <p class="text-gray-600 text-xs mt-1">Votre ID utilisateur Telegram</p>
+                        </div>
+                        <div class="flex items-center justify-between py-3 bg-gray-800 rounded-lg px-4">
+                            <span class="font-medium">Activer les alertes</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="tg-enabled" class="sr-only peer" data-admin-only="true">
+                                <div class="w-11 h-6 bg-gray-600 peer-checked:bg-green-500 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                            </label>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="saveTelegramConfig()" data-admin-only="true" class="btn btn-blue flex-1">
+                                <i class="fas fa-save mr-2"></i>Sauvegarder
+                            </button>
+                            <button onclick="testTelegram()" data-admin-only="true" class="btn btn-green flex-1">
+                                <i class="fas fa-paper-plane mr-2"></i>Tester
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Guide rapide -->
+                    <div class="mt-6 bg-gray-800 rounded-lg p-4">
+                        <h4 class="font-bold text-sm mb-3 text-blue-400"><i class="fas fa-info-circle mr-2"></i>Guide rapide</h4>
+                        <ol class="text-sm text-gray-400 space-y-2 list-decimal list-inside">
+                            <li>Ouvrez Telegram, cherchez <b>@BotFather</b></li>
+                            <li>Envoyez <code class="bg-gray-700 px-1 rounded">/newbot</code> et suivez les instructions</li>
+                            <li>Copiez le <b>Token</b> donne par BotFather</li>
+                            <li>Envoyez <code class="bg-gray-700 px-1 rounded">/start</code> a votre nouveau bot</li>
+                            <li>Allez sur <code class="bg-gray-700 px-1 rounded">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code></li>
+                            <li>Copiez votre <b>Chat ID</b> depuis la reponse</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- Types d'alertes -->
+                <div class="card p-6">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i class="fas fa-bell text-orange-400"></i>
+                        Types d'Alertes
+                    </h3>
+                    <div class="space-y-3">
+                        <label class="flex items-center justify-between py-3 px-4 bg-gray-800 rounded-lg cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-door-open text-green-400"></i>
+                                <div>
+                                    <span class="font-medium">Ouverture de position</span>
+                                    <p class="text-gray-500 text-xs">Quand le robot ouvre un trade</p>
+                                </div>
+                            </div>
+                            <input type="checkbox" id="tg-on-open" checked class="w-5 h-5 rounded" data-admin-only="true">
+                        </label>
+
+                        <label class="flex items-center justify-between py-3 px-4 bg-gray-800 rounded-lg cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-door-closed text-blue-400"></i>
+                                <div>
+                                    <span class="font-medium">Fermeture de position</span>
+                                    <p class="text-gray-500 text-xs">Quand une position est fermee</p>
+                                </div>
+                            </div>
+                            <input type="checkbox" id="tg-on-close" checked class="w-5 h-5 rounded" data-admin-only="true">
+                        </label>
+
+                        <label class="flex items-center justify-between py-3 px-4 bg-gray-800 rounded-lg cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-bullseye text-yellow-400"></i>
+                                <div>
+                                    <span class="font-medium">Objectif atteint</span>
+                                    <p class="text-gray-500 text-xs">Quand le take profit est touche</p>
+                                </div>
+                            </div>
+                            <input type="checkbox" id="tg-on-target" checked class="w-5 h-5 rounded" data-admin-only="true">
+                        </label>
+
+                        <label class="flex items-center justify-between py-3 px-4 bg-gray-800 rounded-lg cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-shield-alt text-red-400"></i>
+                                <div>
+                                    <span class="font-medium">Stop Loss touche</span>
+                                    <p class="text-gray-500 text-xs">Quand le stop loss est atteint</p>
+                                </div>
+                            </div>
+                            <input type="checkbox" id="tg-on-stoploss" checked class="w-5 h-5 rounded" data-admin-only="true">
+                        </label>
+
+                        <label class="flex items-center justify-between py-3 px-4 bg-gray-800 rounded-lg cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-chart-bar text-purple-400"></i>
+                                <div>
+                                    <span class="font-medium">Analyses IA</span>
+                                    <p class="text-gray-500 text-xs">Quand l'IA trouve une opportunite forte</p>
+                                </div>
+                            </div>
+                            <input type="checkbox" id="tg-on-analysis" class="w-5 h-5 rounded" data-admin-only="true">
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <div class="card p-5">
+                <div class="section-title">
+                    <h3><i class="fas fa-shield-halved text-red-400 mr-2"></i>RISK ENGINE</h3>
+                    <span id="risk-state" class="badge badge-green">SAFE</span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div class="metric-box"><span class="text-gray-500">Lot</span><b id="risk-lot" class="mono block">--</b></div>
+                    <div class="metric-box"><span class="text-gray-500">SL $</span><b id="risk-sl" class="mono block">--</b></div>
+                    <div class="metric-box"><span class="text-gray-500">Target $</span><b id="risk-target" class="mono block">--</b></div>
+                    <div class="metric-box"><span class="text-gray-500">Positions</span><b id="risk-maxpos" class="mono block">--</b></div>
+                    <div class="metric-box"><span class="text-gray-500">DD actuel</span><b id="risk-dd-live" class="mono block">--</b></div>
+                    <div class="metric-box"><span class="text-gray-500">Spread max</span><b id="risk-spread-live" class="mono block">--</b></div>
+                    <div class="metric-box"><span class="text-gray-500">ATR SL/TP</span><b id="risk-atr-live" class="mono block">--</b></div>
+                    <div class="metric-box"><span class="text-gray-500">SL broker</span><b id="risk-broker-sl-live" class="mono block">--</b></div>
+                </div>
+                <div id="risk-block-reason" class="mt-4 rounded-lg p-3 bg-gray-900/70 border border-gray-800 text-xs text-gray-400">Aucun blocage signalé.</div>
+                <div class="mt-4 text-xs text-gray-500">
+                    <i class="fas fa-circle-info mr-1"></i>
+                    Cliquez sur <b>Paramètres</b> pour modifier toutes les protections.
+                </div>
+            </div>
+            <div class="card p-5">
+                <div class="section-title">
+                    <h3><i class="fas fa-terminal text-cyan-400 mr-2"></i>BOT ACTIVITY</h3>
+                    <button onclick="clearActivityLog()" class="text-xs text-gray-500 hover:text-gray-300">Effacer</button>
+                </div>
+                <div id="activity-log" class="activity-log">
+                    <div class="log-line text-gray-500">Interface initialisée.</div>
+                </div>
+            </div>
+        </div>
+
+    <script>
+        const API_URL = window.location.origin + '/api';
+        let currentConfig = {};
+        let allCalendarEvents = [];
+
+        // ==================== TOAST NOTIFICATION ====================
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast toast-' + type;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+
+        // ==================== AUTHENTIFICATION ====================
+        const AUTH_TOKEN_KEY = 'forex_robot_auth_token';
+        let currentUser = null;
+
+        function getAuthToken() {
+            return localStorage.getItem(AUTH_TOKEN_KEY) || '';
+        }
+
+        function clearSession() {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            currentUser = null;
+        }
+
+        function applyRoleUI() {
+            const isAdmin = currentUser?.role === 'admin';
+
+            document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
+                if ('disabled' in el) el.disabled = !isAdmin;
+
+                if (el.tagName === 'BUTTON' || el.classList.contains('tab-btn')) {
+                    el.style.display = isAdmin ? '' : 'none';
+                } else if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+                    el.style.opacity = isAdmin ? '1' : '0.55';
+                    el.style.cursor = isAdmin ? '' : 'not-allowed';
+                }
+            });
+
+            const telegramTab = document.getElementById('tab-telegram');
+            if (telegramTab) {
+                telegramTab.querySelectorAll('input, select, textarea').forEach(el => {
+                    el.disabled = !isAdmin;
+                });
+                telegramTab.querySelectorAll('button').forEach(el => {
+                    const action = el.getAttribute('onclick') || '';
+                    if (/saveTelegramConfig|testTelegram/.test(action)) {
+                        el.style.display = isAdmin ? '' : 'none';
+                    }
+                });
+            }
+
+            const roleEl = document.getElementById('session-role');
+            document.getElementById('session-user').textContent = currentUser?.username || '';
+            roleEl.textContent = isAdmin ? 'ADMINISTRATEUR' : 'INVITÉ — LECTURE SEULE';
+            roleEl.className = 'ml-2 ' + (isAdmin ? 'text-green-400' : 'text-yellow-400');
+            document.getElementById('session-bar').classList.remove('hidden');
+        }
+
+        async function loginUser() {
+            const username = document.getElementById('auth-username').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const errorEl = document.getElementById('auth-error');
+            errorEl.textContent = '';
+
+            try {
+                const r = await window.__nativeFetch(API_URL + '/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Connexion impossible');
+
+                localStorage.setItem(AUTH_TOKEN_KEY, d.token);
+                currentUser = {username: d.username, role: d.role};
+                document.getElementById('auth-screen').classList.add('hidden');
+                applyRoleUI();
+                await loadConfigFromServer(true);
+                await refreshData();
+                await refreshDashboardV2(true);
+            } catch (e) {
+                errorEl.textContent = e.message;
+            }
+        }
+
+        async function logoutUser() {
+            const token = getAuthToken();
+            try {
+                if (token) {
+                    await window.__nativeFetch(API_URL + '/auth/logout', {
+                        method: 'POST',
+                        headers: {'Authorization': 'Bearer ' + token}
+                    });
+                }
+            } finally {
+                clearSession();
+                document.getElementById('session-bar').classList.add('hidden');
+                document.getElementById('auth-screen').classList.remove('hidden');
+            }
+        }
+
+        window.__nativeFetch = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+            init = init || {};
+            const url = typeof input === 'string' ? input : input.url;
+            const headers = new Headers(init.headers || {});
+            const token = getAuthToken();
+
+            if (url && url.indexOf('/api/') !== -1 && token &&
+                !url.endsWith('/api/auth/login') &&
+                !url.endsWith('/api/auth/setup')) {
+                headers.set('Authorization', 'Bearer ' + token);
+                init.headers = headers;
+            }
+
+            return window.__nativeFetch(input, init).then(response => {
+                if (response.status === 401 && url && !url.endsWith('/api/auth/status')) {
+                    clearSession();
+                    const screen = document.getElementById('auth-screen');
+                    if (screen) screen.classList.remove('hidden');
+                }
+                return response;
+            });
+        };
+
+        async function initAuthentication() {
+            const token = getAuthToken();
+
+            if (!token) {
+                const r = await window.__nativeFetch(API_URL + '/auth/status');
+                const d = await r.json();
+                document.getElementById('auth-init-hint').classList.toggle('hidden', !!d.initialized);
+                return false;
+            }
+
+            try {
+                const r = await window.__nativeFetch(API_URL + '/auth/status', {
+                    headers: {'Authorization': 'Bearer ' + token}
+                });
+                const d = await r.json();
+
+                if (!r.ok || !d.authenticated) {
+                    clearSession();
+                    document.getElementById('auth-screen').classList.remove('hidden');
+                    return false;
+                }
+
+                currentUser = {username: d.username, role: d.role};
+                document.getElementById('auth-screen').classList.add('hidden');
+                applyRoleUI();
+                return true;
+            } catch (e) {
+                clearSession();
+                document.getElementById('auth-screen').classList.remove('hidden');
+                return false;
+            }
+        }
+
+        // ==================== INIT ====================
+        document.addEventListener('DOMContentLoaded', async function() {
+            if (!await initAuthentication()) return;
+            var today = new Date();
+            var endOfWeek = new Date(today);
+            endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+            document.getElementById('calendar-end-date').value = endOfWeek.toISOString().split('T')[0];
+
+            await loadConfigFromServer(false);
+            await refreshData();
+            loadCalendar();
+            setHistoryPeriod(7);
+            setInterval(refreshData, 5000);
+        });
+
+        // ==================== LOAD CONFIG FROM SERVER ====================
+        function setConfigSyncState(kind, message) {
+            const badge = document.getElementById('config-sync-badge');
+            const last = document.getElementById('config-last-sync');
+            const warning = document.getElementById('config-load-warning');
+            if (!badge) return;
+            badge.className = 'badge ' + (kind === 'ok' ? 'badge-green' : kind === 'error' ? 'badge-red' : 'badge-yellow');
+            badge.textContent = message || (kind === 'ok' ? 'SYNCHRONISÉ' : kind === 'error' ? 'ERREUR' : 'CHARGEMENT...');
+            if (kind === 'ok' && last) last.textContent = new Date().toLocaleTimeString('fr-FR');
+            if (warning) {
+                if (kind === 'error') {
+                    warning.textContent = message || 'Impossible de charger la configuration depuis le serveur.';
+                    warning.classList.remove('hidden');
+                } else warning.classList.add('hidden');
+            }
+        }
+
+        function setField(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.value = value ?? '';
+        }
+        function setCheck(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.checked = !!value;
+        }
+
+        async function loadConfigFromServer(showToastOnSuccess = false) {
+            setConfigSyncState('loading', 'CHARGEMENT...');
+            try {
+                const response = await fetch(API_URL + '/config', { cache: 'no-store' });
+                if (response.status === 401) throw new Error('Session expirée : reconnectez-vous.');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                if (!data.success || !data.config) throw new Error('Réponse de configuration invalide.');
+                const cfg = data.config;
+
+                setField('setting-lot', cfg.lot_size);
+                setField('setting-target', cfg.target_profit);
+                setField('setting-sl', cfg.stop_loss);
+                setField('setting-score', cfg.min_score);
+                setField('setting-interval', cfg.check_interval);
+                setField('setting-maxpos', cfg.max_positions);
+
+                setCheck('impact-high', cfg.impacts?.high);
+                setCheck('impact-medium', cfg.impacts?.medium);
+                setCheck('impact-low', cfg.impacts?.low);
+
+                setField('setting-rsi-period', cfg.rsi_period);
+                setField('setting-rsi-oversold', cfg.rsi_oversold);
+                setField('setting-rsi-overbought', cfg.rsi_overbought);
+                setField('setting-sma-fast', cfg.sma_fast);
+                setField('setting-sma-slow', cfg.sma_slow);
+
+                setField('setting-hard-maxpos', cfg.hard_max_positions);
+                setField('setting-max-exposure', cfg.max_currency_exposure);
+                setField('setting-trade-cooldown', cfg.trade_cooldown_minutes);
+                setField('setting-max-spread', cfg.max_spread_points);
+                setField('setting-dd-new', cfg.max_drawdown_new_trades_pct);
+                setField('setting-dd-stop', cfg.auto_stop_drawdown_pct);
+                setField('setting-news-blackout', cfg.news_blackout_minutes);
+                setCheck('setting-broker-sl', cfg.broker_sl_required);
+
+                setField('setting-m15-bars', cfg.m15_min_bars);
+                setField('setting-m5-bars', cfg.m5_min_bars);
+                setField('setting-atr-period', cfg.atr_period);
+                setField('setting-atr-sl', cfg.atr_sl_multiplier);
+                setField('setting-atr-tp', cfg.atr_tp_multiplier);
+                setField('setting-breakeven', cfg.breakeven_trigger_r);
+                setField('setting-trailing-trigger', cfg.trailing_trigger_r);
+                setField('setting-trailing-atr', cfg.trailing_atr_multiplier);
+
+                setCheck('setting-ai-enabled', cfg.use_ai_analysis);
+                setField('setting-ai-score', cfg.ai_validation_min_score);
+                setField('setting-ai-cooldown', cfg.ai_auto_cooldown);
+                setField('setting-ai-quick-tokens', cfg.ai_quick_num_predict);
+                setField('setting-ai-quick-timeout', cfg.ai_quick_timeout);
+                setField('setting-ai-full-tokens', cfg.ai_full_num_predict);
+                setField('setting-ai-full-timeout', cfg.ai_full_timeout);
+                setField('setting-ai-keepalive', cfg.ai_keep_alive);
+                setField('setting-ollama-model', cfg.ollama_model);
+                setField('setting-ollama-url', cfg.ollama_url);
+
+                collectConfig();
+                setConfigSyncState('ok', 'SYNCHRONISÉ');
+                const card = document.getElementById('tab-settings')?.querySelector('.card');
+                if (card) { card.classList.remove('config-dirty'); card.classList.add('config-clean'); setTimeout(()=>card.classList.remove('config-clean'), 1000); }
+                if (showToastOnSuccess) showToast('Configuration rechargée depuis le serveur', 'success');
+                return true;
+            } catch (e) {
+                console.error('Erreur chargement configuration:', e);
+                setConfigSyncState('error', 'CONFIGURATION NON CHARGÉE — ' + e.message);
+                if (showToastOnSuccess) showToast('Impossible de charger la configuration: ' + e.message, 'error');
+                return false;
+            }
+        }
+
+        // ==================== TRADE HISTORY ====================
+        function formatHistoryDate(value) {
+            if (!value) return '--';
+            const d = new Date(value.replace(' ', 'T'));
+            return Number.isNaN(d.getTime()) ? value : d.toLocaleString('fr-FR');
+        }
+
+        function setHistoryPeriod(days) {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - days);
+            document.getElementById('history-from').value = start.toISOString().slice(0,10);
+            document.getElementById('history-to').value = end.toISOString().slice(0,10);
+            document.getElementById('history-since-beginning').checked = false;
+            loadTradeHistory();
+        }
+
+        function setHistorySinceBeginning() {
+            document.getElementById('history-since-beginning').checked = true;
+            loadTradeHistory();
+        }
+
+        async function loadTradeHistory() {
+            const tbody = document.getElementById('history-table-body');
+            const status = document.getElementById('history-status');
+            const since = document.getElementById('history-since-beginning').checked;
+
+            try {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement...</td></tr>';
+
+                const params = new URLSearchParams();
+                params.set('since_beginning', since ? 'true' : 'false');
+
+                if (!since) {
+                    const from = document.getElementById('history-from').value;
+                    const to = document.getElementById('history-to').value;
+                    if (from) params.set('date_from', from + 'T00:00:00');
+                    if (to) params.set('date_to', to + 'T23:59:59');
+                }
+
+                const response = await fetch(API_URL + '/trading/history?' + params.toString(), {cache: 'no-store'});
+                const data = await response.json();
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.error || data.detail || ('HTTP ' + response.status));
+                }
+
+                document.getElementById('history-count').textContent = data.count ?? 0;
+                document.getElementById('history-wins').textContent = data.wins ?? 0;
+                document.getElementById('history-losses').textContent = data.losses ?? 0;
+
+                const total = Number(data.total_profit || 0);
+                const totalEl = document.getElementById('history-total');
+                totalEl.textContent = '$' + total.toFixed(2);
+                totalEl.className = 'mono font-bold text-lg ' + (total >= 0 ? 'text-green-400' : 'text-red-400');
+
+                const trades = Array.isArray(data.trades) ? data.trades : [];
+                tbody.innerHTML = trades.length ? trades.map(t => {
+                    const net = Number(t.net_profit || 0);
+                    const cls = net >= 0 ? 'text-green-400' : 'text-red-400';
+                    const sideCls = t.type === 'BUY' ? 'text-green-400' : 'text-red-400';
+                    return `<tr class="border-b border-gray-800 hover:bg-gray-900/50">
+                        <td class="py-3 pr-3 whitespace-nowrap">${escapeHtml(formatHistoryDate(t.open_time))}</td>
+                        <td class="py-3 pr-3 whitespace-nowrap">${escapeHtml(formatHistoryDate(t.close_time))}</td>
+                        <td class="py-3 pr-3 font-bold mono">${escapeHtml(t.symbol || '--')}</td>
+                        <td class="py-3 pr-3 font-bold ${sideCls}">${escapeHtml(t.type || '--')}</td>
+                        <td class="py-3 pr-3 mono">${Number(t.volume || 0).toFixed(2)}</td>
+                        <td class="py-3 pr-3 mono">${Number(t.open_price || 0).toFixed(5)}</td>
+                        <td class="py-3 pr-3 mono">${Number(t.close_price || 0).toFixed(5)}</td>
+                        <td class="py-3 pr-3 mono font-bold ${cls}">${net >= 0 ? '+' : ''}$${net.toFixed(2)}</td>
+                    </tr>`;
+                }).join('') : '<tr><td colspan="8" class="text-center text-gray-500 py-8">Aucun trade clôturé sur cette période.</td></tr>';
+
+                status.textContent = since ? 'Depuis le début' : 'Période sélectionnée';
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-red-400 py-8">Erreur : ' + escapeHtml(e.message) + '</td></tr>';
+                status.textContent = 'Erreur';
+            }
+        }
+
+        // ==================== TAB SWITCHING ====================
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.add('hidden'); });
+            document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+        }
+
+        // ==================== REFRESH DATA ====================
+        async function refreshData() {
+            try {
+                var response = await fetch(API_URL + '/mt5/status');
+                var status = await response.json();
+
+                if (status.connected) {
+                    document.getElementById('connection-status').innerHTML =
+                        '<span class="w-3 h-3 rounded-full bg-green-500"></span>' +
+                        '<span class="text-green-400 font-medium">Connecte</span>';
+                    document.getElementById('connection-status').className = 'flex items-center gap-3 bg-green-500/20 px-4 py-2 rounded-lg';
+
+                    document.getElementById('balance').textContent = '$' + status.balance.toFixed(2);
+                    document.getElementById('equity').textContent = '$' + status.equity.toFixed(2);
+                    document.getElementById('auto-status').textContent = status.auto_trading ? 'ON' : 'OFF';
+                    document.getElementById('auto-status').className = 'text-xl font-bold ' + (status.auto_trading ? 'profit' : 'loss');
+
+                    if (status.target_profit) {
+                        document.getElementById('target-display').textContent = '$' + status.target_profit.toFixed(2);
+                    }
+                    if (status.lot_size) document.getElementById('config-lot').textContent = status.lot_size;
+                    if (status.target_profit) document.getElementById('config-target').textContent = '$' + status.target_profit;
+                    if (status.stop_loss !== undefined && status.stop_loss !== null) {
+                        document.getElementById('config-sl').textContent =
+                            Number(status.stop_loss) > 0 ? '$' + Number(status.stop_loss).toFixed(2) : 'Desactive';
+                    }
+                    if (status.min_score !== undefined) document.getElementById('config-score').textContent = status.min_score;
+
+                    if (status.impacts) {
+                        var impactList = [];
+                        if (status.impacts.high) impactList.push('HIGH');
+                        if (status.impacts.medium) impactList.push('MEDIUM');
+                        if (status.impacts.low) impactList.push('LOW');
+                        document.getElementById('config-impacts').textContent = impactList.join(', ') || 'Aucun';
+                    }
+                } else {
+                    document.getElementById('connection-status').innerHTML =
+                        '<span class="w-3 h-3 rounded-full bg-red-500 animate-pulse-custom"></span>' +
+                        '<span class="text-red-400 font-medium">Deconnecte</span>';
+                    document.getElementById('connection-status').className = 'flex items-center gap-3 bg-red-500/20 px-4 py-2 rounded-lg';
+                }
+
+                // Positions actives : toutes les positions, pas seulement la première.
+                var posResponse = await fetch(API_URL + '/trading/positions');
+                var positions = await posResponse.json();
+                if (!Array.isArray(positions)) positions = [];
+
+                var totalOpenProfit = positions.reduce(function(sum, p) {
+                    return sum + Number(p.profit || 0);
+                }, 0);
+
+                document.getElementById('current-profit').textContent = '$' + totalOpenProfit.toFixed(2);
+                document.getElementById('current-profit').className =
+                    'text-xl font-bold mono ' + (totalOpenProfit >= 0 ? 'profit' : 'loss');
+
+                document.getElementById('active-position-count').textContent = positions.length;
+                document.getElementById('active-position-pnl').textContent = '$' + totalOpenProfit.toFixed(2);
+                document.getElementById('active-position-pnl').className =
+                    'mono font-bold ' + (totalOpenProfit >= 0 ? 'profit' : 'loss');
+
+                var activeHtml = '';
+                positions.forEach(function(p) {
+                    var profit = Number(p.profit || 0);
+                    var progress = Math.max(0, Math.min(100, Number(p.progress || 0)));
+
+                    activeHtml +=
+                        '<div class="card p-4 bg-gray-900/60">' +
+                            '<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">' +
+                                '<div class="flex flex-wrap items-center gap-4">' +
+                                    '<span class="font-bold mono text-lg">' + escapeHtml(p.symbol || '--') + '</span>' +
+                                    '<span class="' + (p.type === 'BUY' ? 'profit' : 'loss') + ' font-bold">' + escapeHtml(p.type || '--') + '</span>' +
+                                    '<span class="text-gray-400">' + Number(p.volume || 0).toFixed(2) + ' lots</span>' +
+                                    '<span class="mono ' + (profit >= 0 ? 'profit' : 'loss') + ' font-bold">$' + profit.toFixed(2) + '</span>' +
+                                '</div>' +
+                                '<button onclick="closePosition(' + Number(p.ticket) + ')" data-admin-only="true" class="btn btn-red text-sm py-2">' +
+                                    '<i class="fas fa-times mr-2"></i>Fermer' +
+                                '</button>' +
+                            '</div>' +
+                            '<div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-500">' +
+                                '<span>Progression: <b class="mono text-gray-300">' + progress.toFixed(1) + '%</b></span>' +
+                                '<span>SL: <b class="mono text-red-300">' + (p.sl != null ? Number(p.sl).toFixed(5) : '--') + '</b></span>' +
+                                '<span>TP: <b class="mono text-green-300">' + (p.tp != null ? Number(p.tp).toFixed(5) : '--') + '</b></span>' +
+                                '<span>Ticket: <b class="mono text-gray-300">' + Number(p.ticket || 0) + '</b></span>' +
+                            '</div>' +
+                            '<div class="progress-bar mt-1">' +
+                                '<div class="progress-fill" style="width:' + progress + '%"></div>' +
+                            '</div>' +
+                        '</div>';
+                });
+
+                document.getElementById('active-positions-list').innerHTML =
+                    activeHtml || '<div class="text-gray-600 py-3">Aucune position ouverte</div>';
+
+                document.getElementById('position-card').classList.toggle('hidden', positions.length === 0);
+
+                if (typeof applyRoleUI === 'function') applyRoleUI();
+
+                // Positions list
+                var posHtml = '';
+                for (var i = 0; i < positions.length; i++) {
+                    var p = positions[i];
+                    posHtml +=
+                        '<div class="flex justify-between items-center py-3 px-4 bg-gray-800 rounded-lg">' +
+                            '<div class="flex items-center gap-4">' +
+                                '<span class="font-bold">' + p.symbol + '</span>' +
+                                '<span class="' + (p.type === 'BUY' ? 'profit' : 'loss') + '">' + p.type + '</span>' +
+                                '<span class="text-gray-400">' + p.volume + ' lots</span>' +
+                            '</div>' +
+                            '<div class="flex items-center gap-4">' +
+                                '<span class="mono ' + (p.profit >= 0 ? 'profit' : 'loss') + '">$' + p.profit.toFixed(2) + '</span>' +
+                                '<button onclick="closePosition(' + p.ticket + ')" class="btn btn-red text-sm py-1 px-3">' +
+                                    '<i class="fas fa-times"></i>' +
+                                '</button>' +
+                            '</div>' +
+                        '</div>';
+                }
+                document.getElementById('positions-list').innerHTML = posHtml || '<div class="text-gray-500">Aucune position</div>';
+
+            } catch (error) {
+                console.error('Erreur refresh:', error);
+            }
+        }
+
+        // ==================== CALENDAR (via Backend) ====================
+        async function loadCalendar() {
+            try {
+                document.getElementById('calendar-list').innerHTML =
+                    '<div class="text-gray-500 text-center py-8">' +
+                        '<i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>' +
+                        '<p>Chargement du calendrier...</p>' +
+                    '</div>';
+
+                var response = await fetch(API_URL + '/calendar/full');
+                var data = await response.json();
+
+                var events = [];
+                if (data.success && data.events) {
+                    events = data.events;
+                } else if (Array.isArray(data)) {
+                    events = data;
+                }
+
+                var endDateValue = document.getElementById('calendar-end-date').value;
+                var endDate = new Date(endDateValue);
+                endDate.setHours(23, 59, 59);
+                var now = new Date();
+
+                allCalendarEvents = events.filter(function(event) {
+                    try {
+                        var eventDate = new Date(event.date);
+                        return eventDate >= now && eventDate <= endDate;
+                    } catch (e) {
+                        return false;
+                    }
+                }).sort(function(a, b) {
+                    return new Date(a.date) - new Date(b.date);
+                });
+
+                renderCalendar(allCalendarEvents);
+
+                if (allCalendarEvents.length > 0) {
+                    showToast(allCalendarEvents.length + ' evenements charges', 'success');
+                }
+
+            } catch (error) {
+                console.error('Erreur calendrier:', error);
+                document.getElementById('calendar-list').innerHTML =
+                    '<div class="text-red-400 text-center py-8">' +
+                        '<i class="fas fa-exclamation-triangle text-2xl mb-2 block"></i>' +
+                        '<p>Erreur de chargement du calendrier</p>' +
+                        '<p class="text-gray-500 text-sm mt-2">Verifiez que forex_robot.py est en cours d\'execution</p>' +
+                    '</div>';
+            }
+        }
+
+        function renderCalendar(events) {
+            var html = '';
+            var currentDate = '';
+
+            for (var i = 0; i < events.length; i++) {
+                var event = events[i];
+                var eventDate = new Date(event.date);
+                var dateStr = eventDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+                if (dateStr !== currentDate) {
+                    currentDate = dateStr;
+                    html += '<div class="text-lg font-bold text-blue-400 mt-6 mb-3" style="text-transform:capitalize">' + dateStr + '</div>';
+                }
+
+                var impact = (event.impact || 'low').toLowerCase();
+                if (impact === 'holiday') impact = 'low';
+                var impactClass = impact === 'high' ? 'impact-high' : impact === 'medium' ? 'impact-medium' : 'impact-low';
+                var time = eventDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+                html +=
+                    '<div class="flex items-center justify-between py-3 px-4 bg-gray-800/50 rounded-lg calendar-event" data-impact="' + impact + '">' +
+                        '<div class="flex items-center gap-4">' +
+                            '<span class="mono text-gray-400 w-16">' + time + '</span>' +
+                            '<span class="px-2 py-1 rounded text-xs font-bold ' + impactClass + '">' + impact.toUpperCase() + '</span>' +
+                            '<span class="font-medium">' + (event.title || '') + '</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-4 text-sm">' +
+                            '<span class="text-gray-500">' + (event.country || '') + '</span>' +
+                            (event.forecast ? '<span class="text-gray-400">Prevu: <span class="mono">' + event.forecast + '</span></span>' : '') +
+                            (event.previous ? '<span class="text-gray-500">Precedent: <span class="mono">' + event.previous + '</span></span>' : '') +
+                        '</div>' +
+                    '</div>';
+            }
+
+            document.getElementById('calendar-list').innerHTML = html || '<div class="text-gray-500 text-center py-8">Aucun evenement trouve</div>';
+        }
+
+        function filterCalendar(impact) {
+            document.querySelectorAll('.filter-btn').forEach(function(btn) {
+                btn.classList.remove('btn-blue');
+                btn.classList.add('btn-gray');
+            });
+            document.querySelector('[data-filter="' + impact + '"]').classList.remove('btn-gray');
+            document.querySelector('[data-filter="' + impact + '"]').classList.add('btn-blue');
+
+            if (impact === 'all') {
+                renderCalendar(allCalendarEvents);
+            } else {
+                var filtered = allCalendarEvents.filter(function(e) {
+                    return (e.impact || 'low').toLowerCase() === impact;
+                });
+                renderCalendar(filtered);
+            }
+        }
+
+        // ==================== ANALYSIS ====================
+        async function runAnalysis() {
+            try {
+                document.getElementById('analysis-result').innerHTML =
+                    '<div class="text-gray-500 text-center py-8">' +
+                        '<i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>' +
+                        '<p>Analyse en cours... (peut prendre quelques secondes)</p>' +
+                    '</div>';
+
+                var response = await fetch(API_URL + '/analysis');
+                var result = await response.json();
+
+                if (result.best_opportunity) {
+                    var best = result.best_opportunity;
+                    var actionColor = best.action.includes('BUY') ? 'profit' : best.action.includes('SELL') ? 'loss' : 'text-gray-400';
+
+                    var reasonsHtml = '';
+                    if (best.reasons) {
+                        for (var i = 0; i < best.reasons.length; i++) {
+                            reasonsHtml += '<li>' + best.reasons[i] + '</li>';
+                        }
+                    }
+
+                    document.getElementById('analysis-result').innerHTML =
+                        '<div class="bg-gray-800 rounded-lg p-6">' +
+                            '<div class="flex items-center justify-between mb-4">' +
+                                '<h4 class="text-xl font-bold"><i class="fas fa-crosshairs mr-2 text-blue-400"></i>Meilleure Opportunite</h4>' +
+                            '</div>' +
+                            '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">' +
+                                '<div>' +
+                                    '<div class="text-gray-500 text-sm">Symbole</div>' +
+                                    '<div class="text-2xl font-bold">' + best.symbol + '</div>' +
+                                '</div>' +
+                                '<div>' +
+                                    '<div class="text-gray-500 text-sm">Action</div>' +
+                                    '<div class="text-2xl font-bold ' + actionColor + '">' + best.action + '</div>' +
+                                '</div>' +
+                                '<div>' +
+                                    '<div class="text-gray-500 text-sm">Score</div>' +
+                                    '<div class="text-2xl font-bold mono">' + best.score + '</div>' +
+                                '</div>' +
+                                '<div>' +
+                                    '<div class="text-gray-500 text-sm">Confiance</div>' +
+                                    '<div class="text-2xl font-bold mono">' + best.confidence + '%</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">' +
+                                '<div>' +
+                                    '<div class="text-gray-500">Prix</div>' +
+                                    '<div class="mono">' + (best.current_price ? best.current_price.toFixed(5) : '-') + '</div>' +
+                                '</div>' +
+                                '<div>' +
+                                    '<div class="text-gray-500">RSI</div>' +
+                                    '<div class="mono">' + (best.rsi ? best.rsi.toFixed(1) : '-') + '</div>' +
+                                '</div>' +
+                                '<div>' +
+                                    '<div class="text-gray-500">Tendance</div>' +
+                                    '<div>' + (best.trend || '-') + '</div>' +
+                                '</div>' +
+                                '<div>' +
+                                    '<div class="text-gray-500">Variation</div>' +
+                                    '<div class="mono ' + (best.trend_change >= 0 ? 'profit' : 'loss') + '">' + (best.trend_change || 0) + '%</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="border-t border-gray-700 pt-4">' +
+                                '<div class="text-gray-500 text-sm mb-2">Raisons:</div>' +
+                                '<ul class="list-disc list-inside text-sm space-y-1">' + reasonsHtml + '</ul>' +
+                            '</div>' +
+                        '</div>';
+                } else {
+                    document.getElementById('analysis-result').innerHTML =
+                        '<div class="text-yellow-400 text-center py-8">' +
+                            '<i class="fas fa-exclamation-triangle text-4xl mb-4 block"></i>' +
+                            '<p>Aucune opportunite trouvee avec un score suffisant</p>' +
+                        '</div>';
+                }
+
+            } catch (error) {
+                console.error('Erreur analyse:', error);
+                document.getElementById('analysis-result').innerHTML =
+                    '<div class="text-red-400 text-center py-8">' +
+                        '<i class="fas fa-times-circle text-4xl mb-4 block"></i>' +
+                        '<p>Erreur lors de l\'analyse</p>' +
+                        '<p class="text-gray-500 text-sm mt-2">Verifiez la connexion MT5</p>' +
+                    '</div>';
+            }
+        }
+
+        // ==================== CONFIG ====================
+        function collectConfig() {
+            currentConfig = {
+                lot_size: parseFloat(document.getElementById('setting-lot').value),
+                target_profit: parseFloat(document.getElementById('setting-target').value),
+                stop_loss: parseFloat(document.getElementById('setting-sl').value),
+                min_score: parseInt(document.getElementById('setting-score').value),
+                check_interval: parseInt(document.getElementById('setting-interval').value),
+                max_positions: parseInt(document.getElementById('setting-maxpos').value),
+                impacts: {
+                    high: document.getElementById('impact-high').checked,
+                    medium: document.getElementById('impact-medium').checked,
+                    low: document.getElementById('impact-low').checked
+                },
+                rsi_period: parseInt(document.getElementById('setting-rsi-period').value),
+                rsi_oversold: parseInt(document.getElementById('setting-rsi-oversold').value),
+                rsi_overbought: parseInt(document.getElementById('setting-rsi-overbought').value),
+                sma_fast: parseInt(document.getElementById('setting-sma-fast').value),
+                sma_slow: parseInt(document.getElementById('setting-sma-slow').value),
+                hard_max_positions: parseInt(document.getElementById('setting-hard-maxpos').value),
+                max_currency_exposure: parseInt(document.getElementById('setting-max-exposure').value),
+                trade_cooldown_minutes: parseInt(document.getElementById('setting-trade-cooldown').value),
+                max_spread_points: parseInt(document.getElementById('setting-max-spread').value),
+                max_drawdown_new_trades_pct: parseFloat(document.getElementById('setting-dd-new').value),
+                auto_stop_drawdown_pct: parseFloat(document.getElementById('setting-dd-stop').value),
+                news_blackout_minutes: parseInt(document.getElementById('setting-news-blackout').value),
+                broker_sl_required: document.getElementById('setting-broker-sl').checked,
+                m15_min_bars: parseInt(document.getElementById('setting-m15-bars').value),
+                m5_min_bars: parseInt(document.getElementById('setting-m5-bars').value),
+                atr_period: parseInt(document.getElementById('setting-atr-period').value),
+                atr_sl_multiplier: parseFloat(document.getElementById('setting-atr-sl').value),
+                atr_tp_multiplier: parseFloat(document.getElementById('setting-atr-tp').value),
+                breakeven_trigger_r: parseFloat(document.getElementById('setting-breakeven').value),
+                trailing_trigger_r: parseFloat(document.getElementById('setting-trailing-trigger').value),
+                trailing_atr_multiplier: parseFloat(document.getElementById('setting-trailing-atr').value),
+                use_ai_analysis: document.getElementById('setting-ai-enabled').checked,
+                ai_validation_min_score: parseInt(document.getElementById('setting-ai-score').value),
+                ai_auto_cooldown: parseInt(document.getElementById('setting-ai-cooldown').value),
+                ai_quick_num_predict: parseInt(document.getElementById('setting-ai-quick-tokens').value),
+                ai_quick_timeout: parseInt(document.getElementById('setting-ai-quick-timeout').value),
+                ai_full_num_predict: parseInt(document.getElementById('setting-ai-full-tokens').value),
+                ai_full_timeout: parseInt(document.getElementById('setting-ai-full-timeout').value),
+                ai_keep_alive: document.getElementById('setting-ai-keepalive').value.trim(),
+                ollama_model: document.getElementById('setting-ollama-model').value.trim(),
+                ollama_url: document.getElementById('setting-ollama-url').value.trim()
+            };
+
+            // Affichages rapides
+            const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+            setText('config-lot', currentConfig.lot_size);
+            setText('config-target', '$' + currentConfig.target_profit);
+            setText('config-sl', currentConfig.stop_loss > 0 ? '$' + currentConfig.stop_loss : 'Désactivé');
+            setText('config-score', currentConfig.min_score);
+            setText('config-maxpos', currentConfig.max_positions);
+            const impacts = [];
+            if (currentConfig.impacts.high) impacts.push('HIGH');
+            if (currentConfig.impacts.medium) impacts.push('MEDIUM');
+            if (currentConfig.impacts.low) impacts.push('LOW');
+            setText('config-impacts', impacts.join(', ') || 'Aucun');
+
+            const card = document.getElementById('tab-settings')?.querySelector('.card');
+            if (card) card.classList.add('config-dirty');
+        }
+
+        async function saveConfig() {
+            if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return false; }
+            try {
+                collectConfig();
+                const requiredIds = ['setting-lot','setting-target','setting-sl','setting-score','setting-interval','setting-maxpos','setting-hard-maxpos','setting-max-exposure','setting-trade-cooldown','setting-max-spread','setting-dd-new','setting-dd-stop','setting-news-blackout','setting-m15-bars','setting-m5-bars','setting-atr-period','setting-atr-sl','setting-atr-tp','setting-breakeven','setting-trailing-trigger','setting-trailing-atr','setting-ai-score','setting-ai-cooldown','setting-ai-quick-tokens','setting-ai-quick-timeout','setting-ai-full-tokens','setting-ai-full-timeout'];
+                for (const id of requiredIds) {
+                    const el = document.getElementById(id);
+                    if (!el || el.value === '' || Number.isNaN(Number(el.value))) throw new Error('Valeur manquante ou invalide: ' + id);
+                }
+
+                const response = await fetch(API_URL + '/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentConfig)
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 401) throw new Error('Session expirée.');
+                if (!response.ok || !data.success) throw new Error(data.detail || data.message || ('HTTP ' + response.status));
+
+                await loadConfigFromServer(false);
+                showToast('Configuration sauvegardée et rechargée depuis le serveur (' + (data.updated_fields?.length || 0) + ' paramètres)', 'success');
+                return true;
+            } catch (error) {
+                showToast('Erreur sauvegarde: ' + error.message, 'error');
+                console.error('Erreur saveConfig:', error);
+                return false;
+            }
+        }
+
+        async function resetConfig() {
+            // On restaure la dernière configuration réellement présente sur le serveur.
+            await loadConfigFromServer(true);
+        }
+
+        // ==================== TRADING ACTIONS ====================
+        async function startAutoTrading() {
+            try {
+                await saveConfig();
+                var response = await fetch(API_URL + '/auto/start', { method: 'POST' });
+                var result = await response.json();
+                if (result.success) {
+                    showToast(result.message, 'success');
+                } else {
+                    showToast(result.detail || 'Erreur', 'error');
+                }
+                refreshData();
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
+        }
+
+        async function stopAutoTrading() {
+            try {
+                var response = await fetch(API_URL + '/auto/stop', { method: 'POST' });
+                var result = await response.json();
+                showToast(result.message, 'warning');
+                refreshData();
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
+        }
+
+        async function manualTrade(type) {
+            var symbol = document.getElementById('manual-symbol').value;
+            var volume = parseFloat(document.getElementById('manual-volume').value);
+
+            try {
+                var response = await fetch(API_URL + '/trading/open', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: symbol, type: type, volume: volume })
+                });
+                var result = await response.json();
+
+                if (result.success) {
+                    showToast(type + ' ' + symbol + ' ouvert - Ticket: ' + result.ticket, 'success');
+                    refreshData();
+                } else {
+                    showToast(result.detail || 'Erreur', 'error');
+                }
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
+        }
+
+        async function closePosition(ticket) {
+            if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return; }
+            if (!confirm('Fermer cette position?')) return;
+
+            try {
+                var response = await fetch(API_URL + '/trading/close/' + ticket, { method: 'POST' });
+                var result = await response.json();
+                if (result.success) {
+                    showToast('Position fermee', 'success');
+                    refreshData();
+                } else {
+                    showToast(result.detail || 'Erreur', 'error');
+                }
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
+        }
+
+
+        // Configuration chargée depuis le serveur après authentification.
+
+        // Mark configuration as modified when an administrator changes a field.
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('#tab-settings input').forEach(function(el) {
+                el.addEventListener('input', function() {
+                    const card = document.getElementById('tab-settings')?.querySelector('.card');
+                    if (card) card.classList.add('config-dirty');
+                    const badge = document.getElementById('config-sync-badge');
+                    if (badge) { badge.textContent = 'MODIFIÉ'; badge.className = 'badge badge-yellow'; }
+                });
+                el.addEventListener('change', function() {
+                    const card = document.getElementById('tab-settings')?.querySelector('.card');
+                    if (card) card.classList.add('config-dirty');
+                    const badge = document.getElementById('config-sync-badge');
+                    if (badge) { badge.textContent = 'MODIFIÉ'; badge.className = 'badge badge-yellow'; }
+                });
+            });
+        });
+
+        // ==================== IA FUNCTIONS ====================
+        async function checkAIStatus() {
+            try {
+                var response = await fetch(API_URL + '/ai/status');
+                var data = await response.json();
+
+                var badge = document.getElementById('ai-status-badge');
+                var text = document.getElementById('ai-status-text');
+
+                if (data.online) {
+                    badge.textContent = 'EN LIGNE';
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-green-500/20 text-green-400';
+                    var modelStatus = data.model_available ? 'pret' : 'modele non installe';
+                    text.textContent = 'Modele: ' + data.current_model + ' | ' + data.models.length + ' modele(s) | ' + modelStatus;
+                } else {
+                    badge.textContent = 'HORS LIGNE';
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-red-500/20 text-red-400';
+                    text.textContent = 'Ollama non accessible. Verifiez que le serveur Ubuntu est en marche.';
+                }
+            } catch (e) {
+                var badge = document.getElementById('ai-status-badge');
+                var text = document.getElementById('ai-status-text');
+                badge.textContent = 'ERREUR';
+                badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-yellow-500/20 text-yellow-400';
+                text.textContent = 'Impossible de contacter forex_robot.py';
+            }
+        }
+
+        async function analyzeNews() {
+            var headline = document.getElementById('ai-headline').value.trim();
+            if (!headline) {
+                showToast('Entrez un titre de news', 'warning');
+                return;
+            }
+
+            var content = document.getElementById('ai-content').value.trim();
+            var resultDiv = document.getElementById('ai-news-result');
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML =
+                '<div class="text-gray-500 text-center py-4">' +
+                    '<i class="fas fa-spinner fa-spin text-xl mb-2 block"></i>' +
+                    '<p>Analyse IA en cours... (10-20 secondes)</p>' +
+                '</div>';
+
+            try {
+                var response = await fetch(API_URL + '/ai/analyze-news', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ headline: headline, content: content })
+                });
+                var data = await response.json();
+
+                if (data.error) {
+                    resultDiv.innerHTML =
+                        '<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-4">' +
+                            '<p class="text-red-400"><i class="fas fa-exclamation-circle mr-2"></i>' + data.error + '</p>' +
+                        '</div>';
+                    return;
+                }
+
+                var sentimentColor = data.sentiment === 'bullish' ? 'text-green-400' : data.sentiment === 'bearish' ? 'text-red-400' : 'text-gray-400';
+                var sentimentIcon = data.sentiment === 'bullish' ? 'fa-arrow-up' : data.sentiment === 'bearish' ? 'fa-arrow-down' : 'fa-minus';
+                var scoreBar = Math.round((parseFloat(data.score || 0) + 1) * 50);
+                var riskColor = data.risk_level === 'high' ? 'text-red-400' : data.risk_level === 'medium' ? 'text-yellow-400' : 'text-green-400';
+
+                resultDiv.innerHTML =
+                    '<div class="bg-gray-800 rounded-lg p-5 mt-4 space-y-4">' +
+                        '<div class="flex items-center justify-between">' +
+                            '<span class="text-lg font-bold ' + sentimentColor + '"><i class="fas ' + sentimentIcon + ' mr-2"></i>' + (data.sentiment || 'neutral').toUpperCase() + '</span>' +
+                            '<span class="mono text-sm">Score: ' + (data.score || 0) + '</span>' +
+                        '</div>' +
+                        '<div class="progress-bar"><div class="progress-fill" style="width:' + scoreBar + '%"></div></div>' +
+                        '<div class="grid grid-cols-2 gap-4 text-sm">' +
+                            '<div><span class="text-gray-500">Devises:</span> <span class="font-bold">' + (data.currencies_affected || []).join(', ') + '</span></div>' +
+                            '<div><span class="text-gray-500">Paires:</span> <span class="font-bold">' + (data.pairs_to_watch || []).join(', ') + '</span></div>' +
+                            '<div><span class="text-gray-500">Risque:</span> <span class="font-bold ' + riskColor + '">' + (data.risk_level || '-').toUpperCase() + '</span></div>' +
+                            '<div><span class="text-gray-500">Horizon:</span> <span class="font-bold">' + (data.timeframe || '-') + '</span></div>' +
+                        '</div>' +
+                        '<div class="border-t border-gray-700 pt-3">' +
+                            '<p class="text-gray-400 text-sm mb-1">Analyse:</p>' +
+                            '<p class="text-sm">' + (data.analysis || '-') + '</p>' +
+                        '</div>' +
+                        '<div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">' +
+                            '<p class="text-blue-400 text-sm font-bold"><i class="fas fa-lightbulb mr-2"></i>Recommandation:</p>' +
+                            '<p class="text-sm mt-1">' + (data.recommendation || '-') + '</p>' +
+                        '</div>' +
+                        '<div class="text-gray-600 text-xs text-right">Modele: ' + (data.model || 'mistral') + ' (local)</div>' +
+                    '</div>';
+
+                showToast('Analyse IA terminee', 'success');
+
+            } catch (error) {
+                resultDiv.innerHTML =
+                    '<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-4">' +
+                        '<p class="text-red-400"><i class="fas fa-exclamation-circle mr-2"></i>Erreur: ' + error.message + '</p>' +
+                    '</div>';
+            }
+        }
+
+        async function runFullAIAnalysis() {
+            var resultDiv = document.getElementById('ai-full-result');
+            resultDiv.innerHTML =
+                '<div class="text-gray-500 text-center py-6">' +
+                    '<i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>' +
+                    '<p>Analyse complete en cours...</p>' +
+                    '<p class="text-xs mt-1">Technique (28 paires) + Calendrier + IA</p>' +
+                '</div>';
+
+            try {
+                var response = await fetch(API_URL + '/ai/full-analysis', { cache: 'no-store' });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                var data = await response.json();
+
+                var html = '';
+
+                // Recommandation combinee
+                if (data.combined_recommendation) {
+                    var rec = data.combined_recommendation;
+                    var recColor = rec.action.includes('BUY') ? 'border-green-500 bg-green-500/10' : rec.action.includes('SELL') ? 'border-red-500 bg-red-500/10' : 'border-yellow-500 bg-yellow-500/10';
+                    var recText = rec.action.includes('BUY') ? 'text-green-400' : rec.action.includes('SELL') ? 'text-red-400' : 'text-yellow-400';
+
+                    html +=
+                        '<div class="border-2 ' + recColor + ' rounded-lg p-5 mb-4">' +
+                            '<div class="flex items-center justify-between mb-2">' +
+                                '<span class="text-lg font-bold ' + recText + '"><i class="fas fa-crosshairs mr-2"></i>' + rec.action + '</span>' +
+                                '<span class="mono font-bold">' + rec.symbol + '</span>' +
+                            '</div>' +
+                            '<div class="flex items-center justify-between">' +
+                                '<span class="text-gray-400 text-sm">' + rec.reason + '</span>' +
+                                '<span class="mono text-sm">Confiance: ' + rec.confidence + '%</span>' +
+                            '</div>' +
+                        '</div>';
+                }
+
+                // Analyse technique
+                if (data.technical) {
+                    var tech = data.technical;
+                    html +=
+                        '<div class="bg-gray-800 rounded-lg p-4 mb-3">' +
+                            '<h4 class="font-bold text-sm text-gray-400 mb-2"><i class="fas fa-chart-line mr-2"></i>TECHNIQUE</h4>' +
+                            '<div class="flex items-center justify-between">' +
+                                '<span class="font-bold">' + tech.symbol + ' - ' + tech.action + '</span>' +
+                                '<span class="mono text-sm">Score: ' + tech.score + ' | RSI: ' + (tech.rsi ? tech.rsi.toFixed(1) : '-') + '</span>' +
+                            '</div>' +
+                        '</div>';
+                }
+
+                // Analyse IA
+                if (data.ai_analysis && !data.ai_analysis.error) {
+                    var ai = data.ai_analysis;
+                    var sentColor = ai.sentiment === 'bullish' ? 'text-green-400' : ai.sentiment === 'bearish' ? 'text-red-400' : 'text-gray-400';
+                    html +=
+                        '<div class="bg-gray-800 rounded-lg p-4 mb-3">' +
+                            '<h4 class="font-bold text-sm text-gray-400 mb-2"><i class="fas fa-brain mr-2"></i>ANALYSE IA</h4>' +
+                            '<div class="flex items-center justify-between mb-2">' +
+                                '<span class="font-bold ' + sentColor + '">' + (ai.sentiment || 'neutral').toUpperCase() + ' (score: ' + (ai.score || 0) + ')</span>' +
+                                '<span class="text-gray-500 text-xs">' + (ai.model || 'mistral') + '</span>' +
+                            '</div>' +
+                            '<p class="text-sm text-gray-300">' + (ai.analysis || '') + '</p>' +
+                            (ai.recommendation ? '<p class="text-sm text-blue-400 mt-2"><i class="fas fa-lightbulb mr-1"></i>' + ai.recommendation + '</p>' : '') +
+                        '</div>';
+                } else if (data.ai_analysis && data.ai_analysis.error) {
+                    html +=
+                        '<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-3">' +
+                            '<p class="text-red-400 text-sm"><i class="fas fa-exclamation-circle mr-2"></i>IA: ' + data.ai_analysis.error + '</p>' +
+                        '</div>';
+                }
+
+                // Calendrier
+                if (data.calendar && data.calendar.length > 0) {
+                    html += '<div class="bg-gray-800 rounded-lg p-4">' +
+                        '<h4 class="font-bold text-sm text-gray-400 mb-2"><i class="fas fa-calendar mr-2"></i>EVENEMENTS PROCHES</h4>';
+                    for (var i = 0; i < Math.min(3, data.calendar.length); i++) {
+                        var evt = data.calendar[i];
+                        var impColor = evt.impact.toLowerCase() === 'high' ? 'text-red-400' : 'text-yellow-400';
+                        html += '<div class="flex justify-between text-sm py-1">' +
+                            '<span class="' + impColor + '">[' + evt.impact.toUpperCase() + '] ' + evt.title + '</span>' +
+                            '<span class="text-gray-500">' + evt.minutes_until + ' min</span>' +
+                        '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                resultDiv.innerHTML = html || '<div class="text-gray-500 text-center py-4">Aucune donnee disponible</div>';
+                showToast('Analyse complete terminee', 'success');
+
+            } catch (error) {
+                resultDiv.innerHTML =
+                    '<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">' +
+                        '<p class="text-red-400"><i class="fas fa-exclamation-circle mr-2"></i>Erreur: ' + error.message + '</p>' +
+                    '</div>';
+            }
+        }
+
+        // Check AI status when switching to AI tab
+        var origShowTab = showTab;
+        showTab = function(tabName) {
+            origShowTab(tabName);
+            if (tabName === 'ai') {
+                checkAIStatus();
+            }
+            if (tabName === 'telegram') {
+                loadTelegramStatus();
+            }
+        };
+
+        // ==================== TELEGRAM FUNCTIONS ====================
+        async function loadTelegramStatus() {
+            try {
+                var response = await fetch(API_URL + '/telegram/status');
+                var data = await response.json();
+
+                var badge = document.getElementById('tg-status-badge');
+                var text = document.getElementById('tg-status-text');
+
+                if (data.enabled && data.configured) {
+                    badge.textContent = 'ACTIF';
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-green-500/20 text-green-400';
+                    text.textContent = 'Alertes actives | Chat: ' + data.chat_id;
+                } else if (data.configured) {
+                    badge.textContent = 'DESACTIVE';
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-yellow-500/20 text-yellow-400';
+                    text.textContent = 'Configure mais desactive';
+                } else {
+                    badge.textContent = 'NON CONFIGURE';
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-gray-500/20 text-gray-400';
+                    text.textContent = 'Entrez votre Bot Token et Chat ID';
+                }
+
+                document.getElementById('tg-enabled').checked = data.enabled;
+                document.getElementById('tg-on-open').checked = data.on_open !== false;
+                document.getElementById('tg-on-close').checked = data.on_close !== false;
+                document.getElementById('tg-on-target').checked = data.on_target !== false;
+                document.getElementById('tg-on-stoploss').checked = data.on_stoploss !== false;
+                document.getElementById('tg-on-analysis').checked = data.on_analysis === true;
+            } catch (e) {
+                console.log('Erreur chargement statut Telegram:', e);
+            }
+        }
+
+        async function saveTelegramConfig() {
+            if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return; }
+            var token = document.getElementById('tg-token').value.trim();
+            var chatId = document.getElementById('tg-chatid').value.trim();
+            var enabled = document.getElementById('tg-enabled').checked;
+
+            var payload = {
+                enabled: enabled,
+                on_open: document.getElementById('tg-on-open').checked,
+                on_close: document.getElementById('tg-on-close').checked,
+                on_target: document.getElementById('tg-on-target').checked,
+                on_stoploss: document.getElementById('tg-on-stoploss').checked,
+                on_analysis: document.getElementById('tg-on-analysis').checked
+            };
+            if (token) payload.bot_token = token;
+            if (chatId) payload.chat_id = chatId;
+
+            try {
+                var response = await fetch(API_URL + '/telegram/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                var data = await response.json();
+                if (data.success) {
+                    showToast('Configuration Telegram sauvegardee!', 'success');
+                    loadTelegramStatus();
+                } else {
+                    showToast('Erreur sauvegarde', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur: ' + e.message, 'error');
+            }
+        }
+
+        async function testTelegram() {
+            if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return; }
+            try {
+                // Sauvegarder d'abord
+                await saveTelegramConfig();
+
+                showToast('Envoi du message test...', 'warning');
+                var response = await fetch(API_URL + '/telegram/test', { method: 'POST' });
+                var data = await response.json();
+                if (data.success) {
+                    showToast('Message Telegram envoye! Verifiez votre Telegram.', 'success');
+                } else {
+                    showToast('Echec: ' + (data.error || 'Verifiez token et chat ID'), 'error');
+                }
+            } catch (e) {
+                showToast('Erreur: ' + e.message, 'error');
+            }
+        }
+    </script>
+
+    <script>
+
+        // ==================== V2 DASHBOARD ====================
+        const activityLog = [];
+        function logActivity(message, cls='text-gray-400') {
+            const now = new Date().toLocaleTimeString('fr-FR');
+            activityLog.unshift({now, message, cls});
+            if (activityLog.length > 80) activityLog.pop();
+            const el = document.getElementById('activity-log');
+            if (el) el.innerHTML = activityLog.map(x => `<div class="log-line ${x.cls}"><span class="text-gray-600">${x.now}</span> ${escapeHtml(x.message)}</div>`).join('');
+        }
+        function clearActivityLog() { activityLog.length=0; logActivity('Journal vidé.','text-gray-500'); }
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+        }
+        function setStatus(id, dotId, ok, label, warn=false) {
+            const el=document.getElementById(id), dot=document.getElementById(dotId);
+            if(!el||!dot) return;
+            el.textContent=label;
+            dot.className='status-dot '+(ok?'dot-ok':warn?'dot-warn':'dot-bad');
+        }
+        function actionClass(action) {
+            return String(action||'').includes('BUY') ? 'signal-buy' :
+                   String(action||'').includes('SELL') ? 'signal-sell' : 'signal-neutral';
+        }
+        function updateDecisionFromTechnical(best) {
+            if(!best) return;
+            document.getElementById('decision-symbol').textContent=best.symbol||'---';
+            const action=document.getElementById('decision-action');
+            action.textContent=best.action||'HOLD';
+            action.className='decision-action '+actionClass(best.action);
+            document.getElementById('decision-score').textContent=best.score ?? 0;
+            document.getElementById('decision-rsi').textContent=best.rsi!=null ? Number(best.rsi).toFixed(1) : '--';
+            document.getElementById('decision-trend').textContent=best.trend||'--';
+            document.getElementById('decision-confidence').textContent=(best.confidence||0)+'%';
+            document.getElementById('decision-confidence-ring').style.setProperty('--confidence',(best.confidence||0)+'%');
+            document.getElementById('decision-reason').textContent=(best.reasons||[]).join(' • ') || 'Signal technique disponible';
+            document.getElementById('decision-ai').textContent='EN ATTENTE';
+            logActivity(`${best.symbol||''} ${best.action||''} | score ${best.score||0} | conf ${best.confidence||0}%`,'text-blue-300');
+        }
+        function updateCombinedDecision(rec, tech, ai) {
+            if(!rec) return;
+            const action=document.getElementById('decision-action');
+            action.textContent=rec.action||'HOLD';
+            action.className='decision-action '+actionClass(rec.action);
+            document.getElementById('decision-symbol').textContent=rec.symbol||tech?.symbol||'---';
+            document.getElementById('decision-confidence').textContent=(rec.confidence||0)+'%';
+            document.getElementById('decision-confidence-ring').style.setProperty('--confidence',(rec.confidence||0)+'%');
+            document.getElementById('decision-reason').textContent=rec.reason||'';
+            document.getElementById('decision-ai').textContent=ai?.sentiment ? ai.sentiment.toUpperCase() : '--';
+            const checks=[];
+            checks.push(`<span class="badge badge-${tech && ((rec.action||'').includes('BUY') === (tech.score>0)) ? 'green':'yellow'}">✓ Technique</span>`);
+            if(ai && !ai.error) checks.push(`<span class="badge badge-${((rec.action||'').includes('BUY') && ai.sentiment==='bullish') || ((rec.action||'').includes('SELL') && ai.sentiment==='bearish') ? 'green':'yellow'}">✓ IA</span>`);
+            checks.push(`<span class="badge badge-green">✓ Risk</span>`);
+            document.getElementById('decision-checks').innerHTML=checks.join('');
+            logActivity(`Décision finale: ${rec.action} ${rec.symbol} | ${rec.confidence}%`, actionClass(rec.action)==='signal-sell'?'text-red-300':'text-green-300');
+        }
+        function updateAIHeader(ai) {
+            if(!ai || ai.error) return;
+            const sent=(ai.sentiment||'neutral').toLowerCase();
+            const sentEl=document.getElementById('top-ai-sentiment');
+            sentEl.textContent=sent.toUpperCase();
+            sentEl.className=sent==='bullish'?'signal-buy':sent==='bearish'?'signal-sell':'signal-neutral';
+            document.getElementById('top-ai-score').textContent=ai.score ?? 0;
+            const risk=(ai.risk_level||'--').toUpperCase();
+            const riskEl=document.getElementById('top-ai-risk');
+            riskEl.textContent=risk;
+            riskEl.className=risk==='HIGH'?'signal-sell':risk==='MEDIUM'?'warning':'signal-buy';
+            document.getElementById('top-ai-timeframe').textContent=ai.timeframe||'--';
+            document.getElementById('top-ai-recommendation').textContent=ai.recommendation||'--';
+        }
+        async function refreshTopAIStatus() {
+            try {
+                const r=await fetch(API_URL+'/ai/status');
+                const d=await r.json();
+                const online=!!d.online, available=!!d.model_available;
+                setStatus('ai-top-status','ai-dot',online && available, online ? (available?'ONLINE':'MODEL MISSING'):'OFFLINE',online&&!available);
+                const b=document.getElementById('ai-model-badge');
+                b.textContent=online ? (available ? (d.current_model||'mistral').toUpperCase()+' READY' : 'MODEL MISSING') : 'OFFLINE';
+                b.className='badge '+(online&&available?'badge-green':online?'badge-yellow':'badge-red');
+            } catch(e) {
+                setStatus('ai-top-status','ai-dot',false,'OFFLINE');
+            }
+        }
+        async function refreshTopMT5Status() {
+            try {
+                const r=await fetch(API_URL+'/mt5/status');
+                const d=await r.json();
+                setStatus('mt5-status','mt5-dot',!!d.connected,d.connected?'CONNECTED':'OFFLINE');
+                setStatus('bridge-status','bridge-dot',!!d.connected,d.connected?'CONNECTED':'OFFLINE');
+                document.getElementById('market-status').textContent='CONNECTED';
+                document.getElementById('market-dot').className='status-dot dot-ok';
+                document.getElementById('risk-lot').textContent=d.lot_size ?? '0.10';
+                document.getElementById('risk-sl').textContent='$'+(d.stop_loss ?? 0);
+                document.getElementById('risk-target').textContent='$'+(d.target_profit ?? 0);
+                document.getElementById('risk-maxpos').textContent=d.max_positions ?? 1;
+                const configMax = document.getElementById('config-maxpos');
+                if (configMax) configMax.textContent = d.max_positions ?? 1;
+                const risk=document.getElementById('risk-state');
+                risk.textContent=d.auto_trading?'AUTO ACTIVE':'SAFE';
+                risk.className='badge '+(d.auto_trading?'badge-yellow':'badge-green');
+                try {
+                    const rr = await fetch(API_URL + '/risk/status', {cache:'no-store'});
+                    if (rr.ok) {
+                        const r = await rr.json();
+                        const ddEl = document.getElementById('risk-dd-live');
+                        if (ddEl) {
+                            const dd = Number(r.drawdown_pct || 0);
+                            ddEl.textContent = dd.toFixed(2) + '%';
+                            ddEl.className = 'mono block ' + (dd >= Number(r.auto_stop_drawdown_pct || 8) ? 'text-red-400' : dd >= Number(r.max_drawdown_new_trades_pct || 5) ? 'text-yellow-400' : 'text-green-400');
+                        }
+                        const spreadEl = document.getElementById('risk-spread-live');
+                        if (spreadEl) spreadEl.textContent = Number(r.max_spread_points || 0) + ' pts';
+                        const atrEl = document.getElementById('risk-atr-live');
+                        if (atrEl) atrEl.textContent = Number(r.atr_sl_multiplier || 0).toFixed(1) + 'x / ' + Number(r.atr_tp_multiplier || 0).toFixed(1) + 'x';
+                        const slEl = document.getElementById('risk-broker-sl-live');
+                        if (slEl) {
+                            slEl.textContent = r.broker_sl_required ? 'OBLIGATOIRE' : 'OPTIONNEL';
+                            slEl.className = 'mono block ' + (r.broker_sl_required ? 'text-green-400' : 'text-yellow-400');
+                        }
+                        const rb = document.getElementById('risk-block-reason');
+                        if (rb) {
+                            rb.textContent = r.risk_block_reason || 'Aucun blocage signalé.';
+                            rb.className = 'mt-4 rounded-lg p-3 bg-gray-900/70 border border-gray-800 text-xs ' + (r.risk_block_reason ? 'text-red-300 border-red-500/30' : 'text-gray-400');
+                        }
+                    }
+                } catch(e) {}
+            } catch(e) {
+                setStatus('mt5-status','mt5-dot',false,'OFFLINE');
+                setStatus('bridge-status','bridge-dot',false,'OFFLINE');
+            }
+        }
+        async function loadTopOpportunities() {
+            try {
+                const r=await fetch(API_URL+'/analysis');
+                const d=await r.json();
+                if(d.best_opportunity) updateDecisionFromTechnical(d.best_opportunity);
+                const list=d.opportunities || d.top_opportunities || [];
+                const items=list.length ? list : (d.best_opportunity ? [d.best_opportunity] : []);
+                document.getElementById('top-opportunities').innerHTML=items.slice(0,5).map((x,i)=>{
+                    const cls=actionClass(x.action);
+                    const badge=cls==='signal-buy'?'badge-green':cls==='signal-sell'?'badge-red':'badge-yellow';
+                    return `<div class="opportunity-row">
+                        <span class="font-bold mono">${i+1}. ${escapeHtml(x.symbol||'--')}</span>
+                        <span class="${cls} font-bold">${escapeHtml(x.action||'--')}</span>
+                        <span class="mono">${x.score??0}</span>
+                        <span class="mono">${x.confidence??0}%</span>
+                        <span class="mono">${x.rsi!=null?Number(x.rsi).toFixed(1):'--'}</span>
+                        <button class="badge ${badge}" onclick="showTab('analysis');runAnalysis()">DETAILS</button>
+                    </div>`;
+                }).join('') || '<div class="text-gray-500 text-center py-5">Aucune opportunité.</div>';
+            } catch(e) {
+                document.getElementById('top-opportunities').innerHTML='<div class="text-red-400 text-center py-5">Analyse indisponible</div>';
+            }
+        }
+
+        // ==================== V4 AI PORTFOLIO ====================
+        async function refreshAIPortfolio() {
+            try {
+                let data = null;
+
+                // Preferred endpoint from forex_robot AI Portfolio V4.
+                try {
+                    const r = await fetch(API_URL + '/ai/portfolio');
+                    if (r.ok) data = await r.json();
+                } catch (e) {}
+
+                // Fallback for older/newer backend variants.
+                if (!data) {
+                    const [statusR, posR] = await Promise.all([
+                        fetch(API_URL + '/mt5/status'),
+                        fetch(API_URL + '/trading/positions')
+                    ]);
+                    const status = await statusR.json();
+                    const positions = await posR.json();
+
+                    const maxPositions = Number(status.max_positions ?? 1);
+                    data = {
+                        positions: positions || [],
+                        position_count: (positions || []).length,
+                        max_positions: maxPositions,
+                        remaining_slots: Math.max(0, maxPositions - (positions || []).length),
+                        portfolio_profit: (positions || []).reduce((s, p) => s + Number(p.profit || 0), 0),
+                        risk_level: status.ai_risk_level || null,
+                        exposure: status.exposure || {}
+                    };
+                }
+
+                const positions = Array.isArray(data.positions) ? data.positions : [];
+                const count = Number(data.position_count ?? positions.length ?? 0);
+                const maxPos = Number(data.max_positions ?? data.max ?? 1);
+                const remaining = Math.max(0, Number(data.remaining_slots ?? (maxPos - count)));
+                const profit = Number(data.portfolio_profit ?? data.total_profit ?? positions.reduce((s,p) => s + Number(p.profit || 0), 0));
+
+                document.getElementById('portfolio-position-count').textContent = count + ' / ' + maxPos;
+                document.getElementById('portfolio-remaining').textContent = remaining;
+                document.getElementById('portfolio-profit').textContent = '$' + profit.toFixed(2);
+
+                const profitEl = document.getElementById('portfolio-profit');
+                profitEl.className = 'mono font-bold text-lg ' + (profit >= 0 ? 'text-green-400' : 'text-red-400');
+
+                const risk = String(data.risk_level ?? data.risk ?? '--').toUpperCase();
+                const riskEl = document.getElementById('portfolio-risk');
+                riskEl.textContent = risk;
+                riskEl.className = 'font-bold text-lg ' +
+                    (risk === 'HIGH' ? 'text-red-400' :
+                     risk === 'MEDIUM' ? 'text-yellow-400' :
+                     risk === 'LOW' ? 'text-green-400' : 'text-gray-400');
+
+                const posHtml = positions.map(p => {
+                    const pProfit = Number(p.profit || 0);
+                    const pCls = pProfit >= 0 ? 'text-green-400' : 'text-red-400';
+                    return '<div class="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">' +
+                        '<div class="flex items-center gap-3">' +
+                            '<span class="font-bold mono">' + escapeHtml(p.symbol || '--') + '</span>' +
+                            '<span class="' + (p.type === 'BUY' ? 'text-green-400' : 'text-red-400') + ' font-bold">' + escapeHtml(p.type || '--') + '</span>' +
+                            '<span class="text-gray-500 text-xs">' + escapeHtml(String(p.volume ?? '')) + ' lots</span>' +
+                        '</div>' +
+                        '<span class="mono ' + pCls + '">$' + pProfit.toFixed(2) + '</span>' +
+                    '</div>';
+                }).join('');
+
+                document.getElementById('portfolio-positions-list').innerHTML =
+                    posHtml || '<span class="text-gray-600">Aucune position</span>';
+
+                const exposure = data.exposure || data.currency_exposure || {};
+                const exposureKeys = Object.keys(exposure);
+                if (exposureKeys.length) {
+                    document.getElementById('portfolio-exposure').innerHTML = exposureKeys.map(k => {
+                        const value = Number(exposure[k] || 0);
+                        const cls = value > 2 ? 'text-red-400' : value > 1 ? 'text-yellow-400' : 'text-green-400';
+                        return '<div class="flex justify-between py-1">' +
+                            '<span class="font-bold mono">' + escapeHtml(k) + '</span>' +
+                            '<span class="mono ' + cls + '">' + value.toFixed(2) + '</span>' +
+                        '</div>';
+                    }).join('');
+                } else {
+                    document.getElementById('portfolio-exposure').innerHTML =
+                        '<span class="text-gray-600">Aucune exposition</span>';
+                }
+
+                const decision = data.last_decision || data.ai_decision || data.decision;
+                if (decision) {
+                    const action = String(decision.action || 'HOLD').toUpperCase();
+                    const symbol = decision.symbol || '';
+                    const confidence = decision.confidence != null ? decision.confidence + '%' : '';
+                    document.getElementById('portfolio-ai-decision').innerHTML =
+                        '<span class="font-bold ' +
+                        (action.includes('BUY') ? 'text-green-400' :
+                         action.includes('SELL') ? 'text-red-400' : 'text-yellow-400') +
+                        '">' + escapeHtml(action + (symbol ? ' ' + symbol : '')) + '</span>' +
+                        (confidence ? ' <span class="text-gray-400">— Confiance ' + escapeHtml(String(confidence)) + '</span>' : '') +
+                        (decision.reason ? '<div class="text-gray-400 mt-1">' + escapeHtml(decision.reason) + '</div>' : '');
+                }
+
+            } catch (e) {
+                console.debug('Portfolio IA indisponible:', e);
+            }
+        }
+
+        let aiAnalysisInProgress = false;
+        let lastAIAnalysisAt = 0;
+        const AI_REFRESH_INTERVAL_MS = 60000;
+
+        async function refreshDashboardV2(forceAI = false) {
+            await Promise.allSettled([
+                refreshTopMT5Status(),
+                refreshTopAIStatus(),
+                refreshAIPortfolio()
+            ]);
+
+            const now = Date.now();
+            if (forceAI || (now - lastAIAnalysisAt >= AI_REFRESH_INTERVAL_MS)) {
+                await refreshAIHeaderFromBackend();
+            }
+
+            const t=document.getElementById('decision-time');
+            if(t) t.textContent=new Date().toLocaleTimeString('fr-FR');
+        }
+
+        async function refreshAIHeaderFromBackend() {
+            if (aiAnalysisInProgress) return;
+            aiAnalysisInProgress = true;
+            try {
+                const r = await fetch(API_URL + '/ai/full-analysis', { cache: 'no-store' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const d = await r.json();
+
+                lastAIAnalysisAt = Date.now();
+
+                if (d.technical) updateDecisionFromTechnical(d.technical);
+                if (d.ai_analysis && !d.ai_analysis.error) {
+                    updateAIHeader(d.ai_analysis);
+                }
+                updateCombinedDecision(d.combined_recommendation, d.technical, d.ai_analysis);
+
+                if (d.ai_analysis && !d.ai_analysis.error) {
+                    const risk = String(d.ai_analysis.risk_level || '--').toUpperCase();
+                    const riskEl = document.getElementById('portfolio-risk');
+                    if (riskEl) {
+                        riskEl.textContent = risk;
+                        riskEl.className = 'font-bold text-lg ' +
+                            (risk === 'HIGH' ? 'text-red-400' :
+                             risk === 'MEDIUM' ? 'text-yellow-400' :
+                             risk === 'LOW' ? 'text-green-400' : 'text-gray-400');
+                    }
+                }
+
+                if (d.portfolio) {
+                    const remaining = Number(d.portfolio.remaining_slots ?? 0);
+                    const maxPos = Number(d.portfolio.max_positions ?? 1);
+                    const openPos = Number(d.portfolio.open_positions ?? 0);
+                    const decisionEl = document.getElementById('portfolio-ai-decision');
+                    if (decisionEl && remaining <= 0) {
+                        decisionEl.innerHTML =
+                            '<span class="font-bold text-yellow-400">HOLD</span>' +
+                            ' <span class="text-gray-400">— Max Positions atteint (' +
+                            openPos + '/' + maxPos + ')</span>';
+                    }
+                }
+            } catch (e) {
+                console.debug('Analyse IA dashboard indisponible:', e);
+            } finally {
+                aiAnalysisInProgress = false;
+            }
+        }
+
+        // Wrap existing refresh/runFullAIAnalysis without breaking existing API calls.
+        runFullAIAnalysis = async function() {
+            try {
+                await refreshAIHeaderFromBackend();
+                await refreshAIPortfolio();
+                logActivity('Analyse complète Tech + IA terminée.','text-green-300');
+                showToast('Analyse IA mise à jour', 'success');
+            } catch(e) {
+                logActivity('Erreur analyse complète: '+e.message,'text-red-300');
+            }
+        };
+
+        const _oldRunAnalysis = runAnalysis;
+        runAnalysis = async function() {
+            await _oldRunAnalysis();
+            await loadTopOpportunities();
+        };
+
+        const _oldRefreshData = refreshData;
+        refreshData = async function() {
+            await _oldRefreshData();
+            await refreshDashboardV2();
+        };
+
+        setTimeout(async () => {
+            await refreshDashboardV2(true);
+            await loadTopOpportunities();
+        }, 500);
+
+        setInterval(() => {
+            refreshDashboardV2(false);
+        }, 5000);
+
+    
+    </script>
+</body>
+</html>
