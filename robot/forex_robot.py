@@ -65,6 +65,7 @@ AUTO_STOP_DRAWDOWN_PCT = 8.0
 M15_MIN_BARS = 60
 M5_MIN_BARS = 80
 ATR_PERIOD = 14
+ATR_TIMEFRAME = "M15"
 ATR_SL_MULTIPLIER = 1.5
 ATR_TP_MULTIPLIER = 2.2
 BREAKEVEN_TRIGGER_R = 1.0
@@ -137,6 +138,8 @@ CONFIG = {
     "max_spread_points": 40,
     # Le spread ne doit pas depasser ce % de la distance du SL (cout relatif a la volatilite).
     "max_spread_sl_pct": 15.0,
+    # Unite de temps de l'ATR pour SL/TP/trailing (M15, H1 ou H4).
+    "atr_timeframe": "M15",
     "max_drawdown_new_trades_pct": 5.0,
     "auto_stop_drawdown_pct": 8.0,
     "m15_min_bars": 60,
@@ -189,7 +192,7 @@ PERSISTENT_CONFIG_KEYS = {
     "trailing_atr_multiplier", "broker_sl_required", "news_blackout_minutes",
     "news_after_minutes", "risk_per_trade_pct", "daily_loss_limit_pct",
     "close_on_reversal", "reversal_min_score", "reversal_min_hold_minutes",
-    "block_rollover", "recommended_version",
+    "block_rollover", "recommended_version", "atr_timeframe",
     "telegram_bot_token", "telegram_chat_id", "telegram_enabled",
     "telegram_on_open", "telegram_on_close", "telegram_on_target",
     "telegram_on_stoploss", "telegram_on_analysis",
@@ -646,6 +649,14 @@ def calculate_atr_from_rates(rates, period: int = runtime_cfg("atr_period", ATR_
     return float(np.mean(tr[-period:]))
 
 
+def get_symbol_atr(symbol: str) -> float:
+    """ATR sur l'unite de temps configuree, base unique des SL, TP et trailing."""
+    timeframes = {"M15": mt5.TIMEFRAME_M15, "H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4}
+    timeframe = timeframes.get(str(runtime_cfg("atr_timeframe", ATR_TIMEFRAME)).upper(), mt5.TIMEFRAME_M15)
+    period = int(runtime_cfg("atr_period", ATR_PERIOD))
+    return calculate_atr_from_rates(get_historical_rates(symbol, timeframe, period + 40), period)
+
+
 def trend_from_closes(prices: np.ndarray) -> str:
     """Direction simple basee sur EMA20/EMA50 + variation recente."""
     if len(prices) < 50:
@@ -684,7 +695,7 @@ def get_multitimeframe_filter(symbol: str, expected_action: str) -> Dict:
         m5_close = np.asarray([float(r["close"]) for r in m5], dtype=float)
         result["m15"] = trend_from_closes(m15_close)
         result["m5"] = trend_from_closes(m5_close)
-        result["atr"] = calculate_atr_from_rates(m15, runtime_cfg("atr_period", ATR_PERIOD))
+        result["atr"] = get_symbol_atr(symbol)
 
         tick = mt5.symbol_info_tick(symbol)
         info = mt5.symbol_info(symbol)
@@ -902,8 +913,7 @@ def manage_position_protection(position):
     try:
         symbol = str(position.symbol)
         action = "BUY" if int(position.type) == 0 else "SELL"
-        rates = get_historical_rates(symbol, mt5.TIMEFRAME_M15, 60)
-        atr = calculate_atr_from_rates(rates, runtime_cfg("atr_period", ATR_PERIOD))
+        atr = get_symbol_atr(symbol)
         if atr <= 0:
             return
 
@@ -1324,12 +1334,9 @@ def open_trade(symbol: str, action: str, comment: str = "", requested_volume: fl
 
         price = float(tick.ask if action == "BUY" else tick.bid)
 
-        # SL broker TOUJOURS obligatoire, calcule sur l'ATR M15 si absent.
+        # SL broker TOUJOURS obligatoire, calcule sur l'ATR si absent.
         if atr <= 0:
-            atr = calculate_atr_from_rates(
-                get_historical_rates(symbol, mt5.TIMEFRAME_M15, 60),
-                runtime_cfg("atr_period", ATR_PERIOD),
-            )
+            atr = get_symbol_atr(symbol)
         calc_sl, calc_tp = calculate_atr_sl_tp(symbol_info, tick, action, 0.0, atr)
         if sl_price is None:
             sl_price = calc_sl
@@ -2197,6 +2204,7 @@ async def api_get_config():
             "trade_cooldown_minutes": CONFIG["trade_cooldown_minutes"],
             "max_spread_points": CONFIG["max_spread_points"],
             "max_spread_sl_pct": CONFIG["max_spread_sl_pct"],
+            "atr_timeframe": CONFIG["atr_timeframe"],
             "max_drawdown_new_trades_pct": CONFIG["max_drawdown_new_trades_pct"],
             "auto_stop_drawdown_pct": CONFIG["auto_stop_drawdown_pct"],
             "m15_min_bars": CONFIG["m15_min_bars"],
@@ -2251,6 +2259,7 @@ async def api_update_config(body: dict):
         "trade_cooldown_minutes": "trade_cooldown_minutes",
         "max_spread_points": "max_spread_points",
         "max_spread_sl_pct": "max_spread_sl_pct",
+        "atr_timeframe": "atr_timeframe",
         "max_drawdown_new_trades_pct": "max_drawdown_new_trades_pct",
         "auto_stop_drawdown_pct": "auto_stop_drawdown_pct",
         "m15_min_bars": "m15_min_bars",
@@ -2311,6 +2320,10 @@ async def api_update_config(body: dict):
                 value = bool(value)
             elif config_key == "ai_keep_alive":
                 value = str(value).strip()
+            elif config_key == "atr_timeframe":
+                value = str(value).strip().upper()
+                if value not in {"M15", "H1", "H4"}:
+                    raise ValueError(value)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail=f"Valeur invalide: {config_key}")
         CONFIG[config_key] = value
@@ -2394,7 +2407,7 @@ async def api_update_config(body: dict):
                 "ai_quick_num_predict", "ai_quick_timeout", "ai_full_num_predict",
                 "ai_full_timeout", "ai_keep_alive", "hard_max_positions",
                 "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
-                "max_spread_sl_pct", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+                "max_spread_sl_pct", "atr_timeframe", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
                 "m15_min_bars", "m5_min_bars", "atr_period",
                 "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
                 "trailing_trigger_r", "trailing_atr_multiplier", "broker_sl_required",
@@ -2431,6 +2444,7 @@ async def api_risk_status():
         "currency_exposure": exposure,
         "max_spread_points": int(runtime_cfg("max_spread_points", MAX_SPREAD_POINTS)),
         "max_spread_sl_pct": float(runtime_cfg("max_spread_sl_pct", MAX_SPREAD_SL_PCT)),
+        "atr_timeframe": str(runtime_cfg("atr_timeframe", ATR_TIMEFRAME)),
         "trade_cooldown_minutes": int(runtime_cfg("trade_cooldown_minutes", TRADE_COOLDOWN_MINUTES)),
         "max_drawdown_new_trades_pct": float(runtime_cfg("max_drawdown_new_trades_pct", MAX_DRAWDOWN_FOR_NEW_TRADES_PCT)),
         "auto_stop_drawdown_pct": float(runtime_cfg("auto_stop_drawdown_pct", AUTO_STOP_DRAWDOWN_PCT)),
