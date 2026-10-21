@@ -340,7 +340,7 @@
             </div>
             <div class="card p-4">
                 <div class="text-gray-500 text-xs font-medium mb-1">OBJECTIF</div>
-                <div id="target-display" class="text-xl font-bold mono text-blue-400">$20.00</div>
+                <div id="target-display" class="text-xl font-bold mono text-blue-400">--</div>
             </div>
             <div class="card p-4">
                 <div class="text-gray-500 text-xs font-medium mb-1">AUTO TRADING</div>
@@ -424,7 +424,7 @@
                         </div>
                         <div class="flex justify-between py-2 border-b border-gray-800">
                             <span class="text-gray-400">Objectif Profit</span>
-                            <span id="config-target" class="mono font-bold profit">$20</span>
+                            <span id="config-target" class="mono font-bold profit">--</span>
                         </div>
                         <div class="flex justify-between py-2 border-b border-gray-800">
                             <span class="text-gray-400">Stop Loss</span>
@@ -1353,11 +1353,11 @@
                     document.getElementById('auto-status').textContent = status.auto_trading ? 'ON' : 'OFF';
                     document.getElementById('auto-status').className = 'text-xl font-bold ' + (status.auto_trading ? 'profit' : 'loss');
 
-                    if (status.target_profit) {
-                        document.getElementById('target-display').textContent = '$' + status.target_profit.toFixed(2);
+                    if (status.target_profit !== undefined && status.target_profit !== null) {
+                        document.getElementById('target-display').textContent = formatTarget(status.target_profit);
+                        document.getElementById('config-target').textContent = formatTarget(status.target_profit);
                     }
                     if (status.lot_size) document.getElementById('config-lot').textContent = status.lot_size;
-                    if (status.target_profit) document.getElementById('config-target').textContent = '$' + status.target_profit;
                     if (status.stop_loss !== undefined && status.stop_loss !== null) {
                         document.getElementById('config-sl').textContent =
                             Number(status.stop_loss) > 0 ? '$' + Number(status.stop_loss).toFixed(2) : 'Desactive';
@@ -1711,7 +1711,7 @@
             // Affichages rapides
             const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
             setText('config-lot', currentConfig.lot_size);
-            setText('config-target', '$' + currentConfig.target_profit);
+            setText('config-target', formatTarget(currentConfig.target_profit));
             setText('config-sl', currentConfig.stop_loss > 0 ? '$' + currentConfig.stop_loss : 'Désactivé');
             setText('config-score', currentConfig.min_score);
             setText('config-maxpos', currentConfig.max_positions);
@@ -1723,6 +1723,12 @@
 
             const card = document.getElementById('tab-settings')?.querySelector('.card');
             if (card) card.classList.add('config-dirty');
+        }
+
+        // Objectif $ a 0 = desactive : la sortie se fait par le TP ATR / trailing stop.
+        function formatTarget(value) {
+            const n = Number(value);
+            return n > 0 ? '$' + n.toFixed(2) : 'TP ATR';
         }
 
         async function applyRecommendedConfig() {
@@ -2253,7 +2259,7 @@
                 document.getElementById('market-dot').className='status-dot dot-ok';
                 document.getElementById('risk-lot').textContent=d.lot_size ?? '0.10';
                 document.getElementById('risk-sl').textContent='$'+(d.stop_loss ?? 0);
-                document.getElementById('risk-target').textContent='$'+(d.target_profit ?? 0);
+                document.getElementById('risk-target').textContent=formatTarget(d.target_profit ?? 0);
                 document.getElementById('risk-maxpos').textContent=d.max_positions ?? 1;
                 const configMax = document.getElementById('config-maxpos');
                 if (configMax) configMax.textContent = d.max_positions ?? 1;
