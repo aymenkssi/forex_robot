@@ -33,6 +33,10 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "robot"))
 import forex_robot as fr  # noqa: E402  (client mt5linux + fonctions du robot)
+import strategy_pullback as sp  # noqa: E402
+
+MAJORS = ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
+          "EURJPY", "GBPJPY", "EURGBP"]
 
 DATA_DIR = ROOT / "backtest_data"
 RESULTS_DIR = ROOT / "backtest_results"
@@ -64,6 +68,10 @@ class Params:
     max_currency_exposure: int
     risk_pct: float
     daily_loss_pct: float
+    strategy: str = "score"     # score (actuelle) | pullback (etape 2)
+    tp_r: float = 2.0           # pullback : TP en multiple du risque
+    be_pull: float = 0.0        # pullback : break-even a ce multiple de R (0 = non)
+    session: bool = False       # pullback : entrees seulement 09h-19h serveur
 
 
 def baseline_params() -> Params:
@@ -107,6 +115,19 @@ def default_variants(base: Params) -> list:
         replace(base, name="ATR M15", atr_tf="M15"),
         replace(base, name="TP 3 ATR", atr_tp=3.0),
         replace(base, name="sans inversion", reversal=False),
+    ]
+
+
+def pullback_variants(base: Params) -> list:
+    pb = replace(base, name="recul TP 2R", strategy="pullback", tp_r=2.0, be_pull=0.0,
+                 session=True, max_spread_sl_pct=10.0)
+    return [
+        pb,
+        replace(pb, name="recul TP 1.5R", tp_r=1.5),
+        replace(pb, name="recul TP 3R", tp_r=3.0),
+        replace(pb, name="recul BE 1R", be_pull=1.0),
+        replace(pb, name="recul 24h/24", session=False),
+        replace(pb, name="recul spread 15%", max_spread_sl_pct=15.0),
     ]
 
 
@@ -215,6 +236,8 @@ class SymbolData:
     m15_trend: TrendCache
     m5_trend: TrendCache
     test_start: int
+    h4: dict | None = None
+    ind: dict | None = None
 
 
 # ============================================================ SIMULATION
@@ -328,6 +351,80 @@ def simulate_symbol(sd: SymbolData, p: Params, extra_spread: float) -> list:
     return trades
 
 
+def simulate_pullback(sd: SymbolData, p: Params, extra_spread: float) -> list:
+    """Strategie de recul : signal a la cloture H1, entree a l'ouverture suivante."""
+    trades = []
+    h1t, m5 = sd.h1["time"], sd.m5
+    m5t, h4t = m5["time"], sd.h4["time"]
+    pos = None
+
+    def close_pos(t, price, reason):
+        nonlocal pos
+        r = (price - pos["entry"]) * pos["dir"] / pos["risk"]
+        trades.append({"symbol": sd.symbol, "dir": pos["dir"], "entry_time": pos["t"],
+                       "exit_time": int(t), "r": r, "reason": reason})
+        pos = None
+
+    for i in range(sd.test_start, len(h1t)):
+        t = int(h1t[i]) + 3600
+        j0 = int(np.searchsorted(m5t, t))
+        j1 = int(np.searchsorted(m5t, t + 3600))
+        if j0 >= len(m5t):
+            break
+
+        if pos is None:
+            k = int(np.searchsorted(h4t + sp.H4_SECONDS, t, side="right")) - 1
+            sig = sp.pullback_signal(sd.h4, sd.h1, sd.ind, i, k)
+            hour = datetime.fromtimestamp(int(m5t[j0]), tz=timezone.utc)
+            in_session = 9 <= hour.hour <= 19 if p.session else True
+            if sig and in_session and not (p.block_rollover and blocked_session(int(m5t[j0]))):
+                d = sig["dir"]
+                spread_pts = m5["spread"][j0] + extra_spread
+                spread = spread_pts * sd.point
+                bid = m5["open"][j0]
+                entry = bid + spread if d > 0 else bid
+                if sp.stop_distance_ok(entry, sig["stop"], sig["atr"], d):
+                    dist = (entry - sig["stop"]) * d
+                    if spread_pts <= p.max_spread_points and spread / dist * 100 <= p.max_spread_sl_pct:
+                        pos = {"dir": d, "t": int(m5t[j0]), "entry": entry, "risk": dist,
+                               "sl": sig["stop"], "tp": entry + d * p.tp_r * dist}
+
+        for j in range(j0, j1):
+            if pos is None:
+                break
+            d = pos["dir"]
+            spread = (m5["spread"][j] + extra_spread) * sd.point
+            o, h, l, c = m5["open"][j], m5["high"][j], m5["low"][j], m5["close"][j]
+            if d < 0:
+                o, h, l, c = o + spread, h + spread, l + spread, c + spread
+            t_close = int(m5t[j]) + 300
+            if (o <= pos["sl"]) if d > 0 else (o >= pos["sl"]):
+                close_pos(m5t[j], o, "gap SL")
+            elif (l <= pos["sl"]) if d > 0 else (h >= pos["sl"]):
+                close_pos(t_close, pos["sl"], "SL" if pos["sl"] * d < pos["entry"] * d else "BE")
+            elif (h >= pos["tp"]) if d > 0 else (l <= pos["tp"]):
+                close_pos(t_close, pos["tp"], "TP")
+            elif p.be_pull > 0 and (c - pos["entry"]) * d >= p.be_pull * pos["risk"] \
+                    and (pos["entry"] - pos["sl"]) * d > 0:
+                pos["sl"] = pos["entry"]
+
+    if pos is not None:
+        last = len(m5t) - 1
+        price = m5["close"][last] + (0 if pos["dir"] > 0 else m5["spread"][last] * sd.point)
+        close_pos(m5t[last] + 300, price, "fin")
+    return trades
+
+
+def equity_stats(trades: list) -> np.ndarray:
+    """Capitalisation et drawdown d'un sous-ensemble de trades (ordre des clotures)."""
+    equity, peak, max_dd = 1.0, 1.0, 0.0
+    for t in sorted(trades, key=lambda x: x["exit_time"]):
+        equity *= 1 + t["r"] * t["risk_frac"]
+        peak = max(peak, equity)
+        max_dd = max(max_dd, (peak - equity) / peak)
+    return np.array([equity, max_dd])
+
+
 def apply_portfolio(trades: list, p: Params) -> tuple[list, np.ndarray]:
     """Positions max, exposition par devise, perte du jour ; capitalisation du risque."""
     accepted, open_pos = [], []
@@ -409,19 +506,29 @@ def main():
     ap.add_argument("--extra-spread", type=float, default=0.0, help="points de spread ajoutes (defaut 0)")
     ap.add_argument("--workers", type=int, default=2, help="processus pour le calcul des scores")
     ap.add_argument("--no-cache", action="store_true", help="retelecharger l'historique MT5")
+    ap.add_argument("--strategy", choices=["score", "pullback"], default="score",
+                    help="score = strategie actuelle, pullback = recul dans la tendance (etape 2)")
+    ap.add_argument("--dev", type=float, default=0.67,
+                    help="pullback : part de la periode pour la mise au point, le reste sert a la validation")
     args = ap.parse_args()
 
     if not fr.connect_mt5():
         sys.exit("MT5 injoignable via le bridge : verifier MT5 et le service mt5-bridge.")
 
     base = baseline_params()
-    variants = default_variants(base)
-    symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or list(fr.CONFIG["symbols"])
+    pullback = args.strategy == "pullback"
+    variants = pullback_variants(base) if pullback else default_variants(base)
+    default_symbols = MAJORS if pullback else list(fr.CONFIG["symbols"])
+    symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or default_symbols
     atr_needed = {(v.atr_tf, v.atr_period) for v in variants}
 
-    print(f"Backtest {args.months} mois | {len(symbols)} paires | spread +{args.extra_spread} pts | "
-          f"base: score>={base.min_score}, ATR {base.atr_tf}, SL {base.atr_sl}x, TP {base.atr_tp}x, "
-          f"spread<={base.max_spread_sl_pct}% du SL")
+    if pullback:
+        print(f"Backtest RECUL DANS LA TENDANCE {args.months} mois | {len(symbols)} paires | "
+              f"spread +{args.extra_spread} pts | mise au point {args.dev:.0%} / validation {1 - args.dev:.0%}")
+    else:
+        print(f"Backtest {args.months} mois | {len(symbols)} paires | spread +{args.extra_spread} pts | "
+              f"base: score>={base.min_score}, ATR {base.atr_tf}, SL {base.atr_sl}x, TP {base.atr_tp}x, "
+              f"spread<={base.max_spread_sl_pct}% du SL")
     started = time.time()
 
     loaded, score_jobs = {}, []
@@ -431,7 +538,7 @@ def main():
             print(f"  {sym}: indisponible chez le broker")
             continue
         bars = {tf: fetch_bars(sym, tf, args.months, not args.no_cache) for tf in ("H1", "M15", "M5")}
-        for tf in {v.atr_tf for v in variants} - set(bars):
+        for tf in ({v.atr_tf for v in variants} | ({"H4"} if pullback else set())) - set(bars):
             bars[tf] = fetch_bars(sym, tf, args.months, not args.no_cache)
         if any(b is None or len(b["time"]) < 200 for b in bars.values()):
             print(f"  {sym}: historique insuffisant")
@@ -441,7 +548,8 @@ def main():
         start = max(int(np.searchsorted(bars["H1"]["time"], max(test_from, bars["M5"]["time"][100]))),
                     int(np.searchsorted(bars["H1"]["time"], bars["H1"]["time"][0] + 31 * 86400)))
         loaded[sym] = (float(info.point), bars, start)
-        score_jobs.append((sym, bars["H1"]["time"], bars["H1"]["close"], start))
+        if not pullback:
+            score_jobs.append((sym, bars["H1"]["time"], bars["H1"]["close"], start))
         print(f"  {sym}: H1={len(bars['H1']['time'])} M15={len(bars['M15']['time'])} M5={len(bars['M5']['time'])}")
 
     if not loaded:
@@ -472,10 +580,12 @@ def main():
             atr_bars[(tf, "time")] = bars[tf]["time"]
         datasets.append(SymbolData(
             symbol=sym, point=point, h1=bars["H1"], m15=bars["M15"], m5=bars["M5"],
-            atr_bars=atr_bars, scores=scores[sym],
+            atr_bars=atr_bars, scores=scores.get(sym, np.zeros(0)),
             m15_trend=TrendCache(bars["M15"]["close"], 60),
             m5_trend=TrendCache(bars["M5"]["close"], 80),
             test_start=start,
+            h4=bars.get("H4"),
+            ind=sp.compute_indicators(bars["H4"], bars["H1"]) if pullback else None,
         ))
 
     span_start = min(int(d.h1["time"][d.test_start]) for d in datasets)
@@ -486,16 +596,31 @@ def main():
 
     RESULTS_DIR.mkdir(exist_ok=True)
     rows, base_trades = [], None
+    split_t = span_start + (span_end - span_start) * args.dev
+    dev_rows, val_rows = [], []
     for v in variants:
         raw = []
         for sd in datasets:
-            raw.extend(simulate_symbol(sd, v, args.extra_spread))
+            raw.extend(simulate_pullback(sd, v, args.extra_spread) if pullback
+                       else simulate_symbol(sd, v, args.extra_spread))
         accepted, eq = apply_portfolio(raw, v)
         rows.append(summarize(v.name, accepted, eq, months_span))
-        if v is base:
+        if v is variants[0]:
             base_trades = accepted
+        if pullback:
+            dev = [t for t in accepted if t["entry_time"] < split_t]
+            val = [t for t in accepted if t["entry_time"] >= split_t]
+            dev_rows.append(summarize(v.name, dev, equity_stats(dev), months_span * args.dev))
+            val_rows.append(summarize(v.name, val, equity_stats(val), months_span * (1 - args.dev)))
         print(f"  variante '{v.name}' : {len(accepted)} trades")
 
+    if pullback:
+        split_day = datetime.fromtimestamp(split_t, tz=timezone.utc)
+        print(f"\n=== MISE AU POINT (jusqu'au {split_day:%Y-%m-%d}) : choisir la variante ici ===")
+        print_table(dev_rows)
+        print(f"\n=== VALIDATION (depuis le {split_day:%Y-%m-%d}) : juger la variante choisie, sans la retoucher ===")
+        print_table(val_rows)
+        print("\n=== PERIODE COMPLETE ===")
     print()
     print_table(rows)
 
@@ -505,7 +630,7 @@ def main():
         w.writeheader()
         w.writerows(rows)
     if base_trades:
-        with open(RESULTS_DIR / f"trades-actuel-{stamp}.csv", "w", newline="", encoding="utf-8") as f:
+        with open(RESULTS_DIR / f"trades-{args.strategy}-{stamp}.csv", "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=["symbol", "dir", "entry_time", "exit_time", "r", "reason"])
             w.writeheader()
             for t in base_trades:
@@ -516,7 +641,7 @@ def main():
         reasons = {}
         for t in base_trades:
             reasons[t["reason"]] = reasons.get(t["reason"], 0) + 1
-        print("\nConfiguration actuelle - R par paire :",
+        print(f"\n{variants[0].name} - R par paire :",
               ", ".join(f"{s} {r:+.1f}" for s, r in sorted(per_sym.items(), key=lambda kv: kv[1])))
         print("Sorties :", ", ".join(f"{k} {v}" for k, v in sorted(reasons.items(), key=lambda kv: -kv[1])))
     print(f"\nResultats : {RESULTS_DIR}/resume-{stamp}.csv  ({time.time() - started:.0f} s)")
