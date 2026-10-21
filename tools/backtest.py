@@ -185,8 +185,20 @@ def fetch_bars(symbol: str, tf: str, months: int, use_cache: bool) -> dict | Non
                  "D1": fr.mt5.TIMEFRAME_D1}[tf]
     count = int((months + 1) * 31 * 86400 / TF_SECONDS[tf])
     fr.mt5.symbol_select(symbol, True)
-    raw = fr.mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+    # MT5 renvoie None si l'on demande plus de bougies qu'il n'en a, et charge
+    # l'historique en arriere-plan au premier acces : on reessaie, puis on reduit.
+    raw = None
+    for attempt, n in enumerate([count, count, 6000, 4000, 3000, 2500, 2000, 1500, 1000]):
+        if attempt > 0 and n >= count and attempt != 1:
+            continue
+        n = min(n, count)
+        raw = fr.mt5.copy_rates_from_pos(symbol, timeframe, 0, n)
+        if raw is not None and len(raw) > 0:
+            break
+        if attempt == 0:
+            time.sleep(3)
     if raw is None or len(raw) == 0:
+        print(f"  {symbol} {tf}: aucune bougie ({fr.mt5.last_error()})")
         return None
     bars = _to_columns(raw)
     np.savez_compressed(path, **bars)
@@ -500,7 +512,7 @@ def run_trend(args) -> None:
             continue
         d1 = fetch_bars(sym, "D1", args.months, not args.no_cache)
         if d1 is None or len(d1["time"]) < 300:
-            print(f"  {sym}: historique insuffisant")
+            print(f"  {sym}: historique insuffisant ({0 if d1 is None else len(d1['time'])} bougies D1)")
             continue
         point = float(info.point)
         # Swap en points (SYMBOL_SWAP_MODE_POINTS = 1) ; autre mode : non estime.
