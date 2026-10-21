@@ -501,7 +501,8 @@ def run_trend(args) -> None:
     variants = trend_variants(base)
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or list(fr.CONFIG["symbols"])
     print(f"Backtest TENDANCE JOURNALIERE {args.months} mois | {len(symbols)} paires | "
-          f"spread +{args.extra_spread} pts | mise au point {args.dev:.0%} / validation {1 - args.dev:.0%}")
+          f"spread +{args.extra_spread} pts | {'SANS SWAP (compte islamique)' if args.swap_free else 'swaps du compte connecte'} | "
+          f"mise au point {args.dev:.0%} / validation {1 - args.dev:.0%}")
     started = time.time()
 
     loaded = {}
@@ -516,7 +517,9 @@ def run_trend(args) -> None:
             continue
         point = float(info.point)
         # Swap en points (SYMBOL_SWAP_MODE_POINTS = 1) ; autre mode : non estime.
-        if int(getattr(info, "swap_mode", 1)) == 1:
+        if args.swap_free:
+            swaps = (0.0, 0.0)
+        elif int(getattr(info, "swap_mode", 1)) == 1:
             swaps = (float(info.swap_long), float(info.swap_short))
         else:
             swaps = (0.0, 0.0)
@@ -679,6 +682,8 @@ def main():
     ap.add_argument("--no-cache", action="store_true", help="retelecharger l'historique MT5")
     ap.add_argument("--strategy", choices=["score", "pullback", "trend"], default="score",
                     help="score = actuelle, pullback = recul dans la tendance, trend = tendance journaliere")
+    ap.add_argument("--swap-free", action="store_true",
+                    help="trend : compte islamique (aucun swap deduit)")
     ap.add_argument("--dev", type=float, default=0.67,
                     help="pullback : part de la periode pour la mise au point, le reste sert a la validation")
     args = ap.parse_args()
