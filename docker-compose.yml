@@ -3,23 +3,34 @@ services:
     image: nginx:alpine
     container_name: iamrobot-proxy
     restart: always
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
     networks:
       - web
+
     labels:
       - "traefik.enable=true"
+
+      # Domaine
       - "traefik.http.routers.iamrobot.rule=Host(`iamrobot.me`)"
       - "traefik.http.routers.iamrobot.entrypoints=websecure"
       - "traefik.http.routers.iamrobot.tls=true"
       - "traefik.http.routers.iamrobot.tls.certresolver=letsencrypt"
+
+      # Service interne Nginx
       - "traefik.http.services.iamrobot.loadbalancer.server.port=80"
-      - "traefik.http.routers.iamrobot.middlewares=iamrobot-headers"
+
+      # Headers de sécurité
       - "traefik.http.middlewares.iamrobot-headers.headers.stsSeconds=31536000"
       - "traefik.http.middlewares.iamrobot-headers.headers.stsIncludeSubdomains=true"
       - "traefik.http.middlewares.iamrobot-headers.headers.stsPreload=true"
+
+      - "traefik.http.routers.iamrobot.middlewares=iamrobot-headers"
 
 networks:
   web:
