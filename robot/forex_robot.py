@@ -59,6 +59,7 @@ HARD_MAX_POSITIONS = 5
 MAX_CURRENCY_EXPOSURE = 2
 TRADE_COOLDOWN_MINUTES = 15
 MAX_SPREAD_POINTS = 40
+MAX_SPREAD_SL_PCT = 15.0
 MAX_DRAWDOWN_FOR_NEW_TRADES_PCT = 5.0
 AUTO_STOP_DRAWDOWN_PCT = 8.0
 M15_MIN_BARS = 60
@@ -134,6 +135,8 @@ CONFIG = {
     "max_currency_exposure": 2,
     "trade_cooldown_minutes": 15,
     "max_spread_points": 40,
+    # Le spread ne doit pas depasser ce % de la distance du SL (cout relatif a la volatilite).
+    "max_spread_sl_pct": 15.0,
     "max_drawdown_new_trades_pct": 5.0,
     "auto_stop_drawdown_pct": 8.0,
     "m15_min_bars": 60,
@@ -180,7 +183,7 @@ PERSISTENT_CONFIG_KEYS = {
     "ai_validation_min_score", "ai_auto_cooldown", "ai_quick_num_predict",
     "ai_quick_timeout", "ai_full_num_predict", "ai_full_timeout", "ai_keep_alive",
     "hard_max_positions", "max_currency_exposure", "trade_cooldown_minutes",
-    "max_spread_points", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+    "max_spread_points", "max_spread_sl_pct", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
     "m15_min_bars", "m5_min_bars", "atr_period", "atr_sl_multiplier",
     "atr_tp_multiplier", "breakeven_trigger_r", "trailing_trigger_r",
     "trailing_atr_multiplier", "broker_sl_required", "news_blackout_minutes",
@@ -318,7 +321,7 @@ def _apply_config_values(saved: dict) -> None:
             "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
             "trailing_trigger_r", "trailing_atr_multiplier",
             "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
-            "risk_per_trade_pct", "daily_loss_limit_pct"
+            "risk_per_trade_pct", "daily_loss_limit_pct", "max_spread_sl_pct"
         }:
             CONFIG[key] = float(value)
         elif key in {
@@ -697,6 +700,16 @@ def get_multitimeframe_filter(symbol: str, expected_action: str) -> Dict:
                 result["allowed"] = False
                 result["reason"] = f"Spread trop eleve ({result['spread_points']:.1f} > {runtime_cfg("max_spread_points", MAX_SPREAD_POINTS)})"
                 return result
+            # Un spread de 3 pips est acceptable avec un SL de 30 pips, pas avec un SL de 10.
+            sl_distance = result["atr"] * runtime_cfg("atr_sl_multiplier", ATR_SL_MULTIPLIER)
+            max_pct = float(runtime_cfg("max_spread_sl_pct", MAX_SPREAD_SL_PCT))
+            if sl_distance > 0 and max_pct > 0:
+                spread_pct = (float(tick.ask) - float(tick.bid)) / sl_distance * 100.0
+                result["spread_sl_pct"] = round(spread_pct, 1)
+                if spread_pct > max_pct:
+                    result["allowed"] = False
+                    result["reason"] = f"Spread trop cher ({spread_pct:.0f}% du SL > {max_pct:g}%)"
+                    return result
 
         wanted = "bullish" if expected_action == "BUY" else "bearish"
         if result["m15"] != wanted or result["m5"] != wanted:
@@ -2183,6 +2196,7 @@ async def api_get_config():
             "max_currency_exposure": CONFIG["max_currency_exposure"],
             "trade_cooldown_minutes": CONFIG["trade_cooldown_minutes"],
             "max_spread_points": CONFIG["max_spread_points"],
+            "max_spread_sl_pct": CONFIG["max_spread_sl_pct"],
             "max_drawdown_new_trades_pct": CONFIG["max_drawdown_new_trades_pct"],
             "auto_stop_drawdown_pct": CONFIG["auto_stop_drawdown_pct"],
             "m15_min_bars": CONFIG["m15_min_bars"],
@@ -2236,6 +2250,7 @@ async def api_update_config(body: dict):
         "max_currency_exposure": "max_currency_exposure",
         "trade_cooldown_minutes": "trade_cooldown_minutes",
         "max_spread_points": "max_spread_points",
+        "max_spread_sl_pct": "max_spread_sl_pct",
         "max_drawdown_new_trades_pct": "max_drawdown_new_trades_pct",
         "auto_stop_drawdown_pct": "auto_stop_drawdown_pct",
         "m15_min_bars": "m15_min_bars",
@@ -2279,6 +2294,7 @@ async def api_update_config(body: dict):
         "atr_sl_multiplier", "atr_tp_multiplier",
         "breakeven_trigger_r", "trailing_trigger_r",
         "trailing_atr_multiplier", "risk_per_trade_pct", "daily_loss_limit_pct",
+        "max_spread_sl_pct",
     }
     bool_keys = {"broker_sl_required", "use_ai_analysis", "close_on_reversal", "block_rollover"}
 
@@ -2311,6 +2327,7 @@ async def api_update_config(body: dict):
     CONFIG["max_currency_exposure"] = max(1, min(int(CONFIG["max_currency_exposure"]), 10))
     CONFIG["trade_cooldown_minutes"] = max(0, min(int(CONFIG["trade_cooldown_minutes"]), 1440))
     CONFIG["max_spread_points"] = max(0, min(int(CONFIG["max_spread_points"]), 1000))
+    CONFIG["max_spread_sl_pct"] = max(0.0, min(float(CONFIG["max_spread_sl_pct"]), 100.0))
     CONFIG["max_drawdown_new_trades_pct"] = max(0.0, min(float(CONFIG["max_drawdown_new_trades_pct"]), 100.0))
     CONFIG["auto_stop_drawdown_pct"] = max(CONFIG["max_drawdown_new_trades_pct"], min(float(CONFIG["auto_stop_drawdown_pct"]), 100.0))
     CONFIG["m15_min_bars"] = max(50, min(int(CONFIG["m15_min_bars"]), 500))
@@ -2377,7 +2394,7 @@ async def api_update_config(body: dict):
                 "ai_quick_num_predict", "ai_quick_timeout", "ai_full_num_predict",
                 "ai_full_timeout", "ai_keep_alive", "hard_max_positions",
                 "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
-                "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+                "max_spread_sl_pct", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
                 "m15_min_bars", "m5_min_bars", "atr_period",
                 "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
                 "trailing_trigger_r", "trailing_atr_multiplier", "broker_sl_required",
@@ -2413,6 +2430,7 @@ async def api_risk_status():
         "max_currency_exposure": int(runtime_cfg("max_currency_exposure", MAX_CURRENCY_EXPOSURE)),
         "currency_exposure": exposure,
         "max_spread_points": int(runtime_cfg("max_spread_points", MAX_SPREAD_POINTS)),
+        "max_spread_sl_pct": float(runtime_cfg("max_spread_sl_pct", MAX_SPREAD_SL_PCT)),
         "trade_cooldown_minutes": int(runtime_cfg("trade_cooldown_minutes", TRADE_COOLDOWN_MINUTES)),
         "max_drawdown_new_trades_pct": float(runtime_cfg("max_drawdown_new_trades_pct", MAX_DRAWDOWN_FOR_NEW_TRADES_PCT)),
         "auto_stop_drawdown_pct": float(runtime_cfg("auto_stop_drawdown_pct", AUTO_STOP_DRAWDOWN_PCT)),

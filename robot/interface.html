@@ -507,7 +507,8 @@
                         <div><label class="block text-gray-400 text-sm mb-2">Hard max positions</label><input type="number" id="setting-hard-maxpos" min="1" max="20" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond de sécurité global</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Exposition max / devise</label><input type="number" id="setting-max-exposure" min="1" max="10" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Exposition nette maximale</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Cooldown même paire (min)</label><input type="number" id="setting-trade-cooldown" min="0" max="1440" step="1" class="input-dark mono"></div>
-                        <div><label class="block text-gray-400 text-sm mb-2">Spread maximum (points)</label><input type="number" id="setting-max-spread" min="0" max="1000" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Spread maximum (points)</label><input type="number" id="setting-max-spread" min="0" max="1000" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond absolu (10 points = 1 pip)</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Spread max (% du SL)</label><input type="number" id="setting-max-spread-sl" min="0" max="100" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Coût du spread relatif à la volatilité (0 = désactivé)</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">DD : bloquer nouvelles entrées (%)</label><input type="number" id="setting-dd-new" min="0" max="100" step="0.1" class="input-dark mono"></div>
                         <div><label class="block text-gray-400 text-sm mb-2">DD : arrêt automatique (%)</label><input type="number" id="setting-dd-stop" min="0" max="100" step="0.1" class="input-dark mono"></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Blackout news HIGH (min)</label><input type="number" id="setting-news-blackout" min="0" max="240" step="1" class="input-dark mono"></div>
@@ -1203,6 +1204,7 @@
                 setField('setting-max-exposure', cfg.max_currency_exposure);
                 setField('setting-trade-cooldown', cfg.trade_cooldown_minutes);
                 setField('setting-max-spread', cfg.max_spread_points);
+                setField('setting-max-spread-sl', cfg.max_spread_sl_pct);
                 setField('setting-dd-new', cfg.max_drawdown_new_trades_pct);
                 setField('setting-dd-stop', cfg.auto_stop_drawdown_pct);
                 setField('setting-news-blackout', cfg.news_blackout_minutes);
@@ -1677,6 +1679,7 @@
                 max_currency_exposure: parseInt(document.getElementById('setting-max-exposure').value),
                 trade_cooldown_minutes: parseInt(document.getElementById('setting-trade-cooldown').value),
                 max_spread_points: parseInt(document.getElementById('setting-max-spread').value),
+                max_spread_sl_pct: parseFloat(document.getElementById('setting-max-spread-sl').value),
                 max_drawdown_new_trades_pct: parseFloat(document.getElementById('setting-dd-new').value),
                 auto_stop_drawdown_pct: parseFloat(document.getElementById('setting-dd-stop').value),
                 news_blackout_minutes: parseInt(document.getElementById('setting-news-blackout').value),
@@ -1750,7 +1753,7 @@
             if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return false; }
             try {
                 collectConfig();
-                const requiredIds = ['setting-lot','setting-target','setting-sl','setting-score','setting-interval','setting-maxpos','setting-hard-maxpos','setting-max-exposure','setting-trade-cooldown','setting-max-spread','setting-dd-new','setting-dd-stop','setting-news-blackout','setting-news-after','setting-risk-pct','setting-daily-loss','setting-reversal-score','setting-reversal-hold','setting-m15-bars','setting-m5-bars','setting-atr-period','setting-atr-sl','setting-atr-tp','setting-breakeven','setting-trailing-trigger','setting-trailing-atr','setting-ai-score','setting-ai-cooldown','setting-ai-quick-tokens','setting-ai-quick-timeout','setting-ai-full-tokens','setting-ai-full-timeout'];
+                const requiredIds = ['setting-lot','setting-target','setting-sl','setting-score','setting-interval','setting-maxpos','setting-hard-maxpos','setting-max-exposure','setting-trade-cooldown','setting-max-spread','setting-max-spread-sl','setting-dd-new','setting-dd-stop','setting-news-blackout','setting-news-after','setting-risk-pct','setting-daily-loss','setting-reversal-score','setting-reversal-hold','setting-m15-bars','setting-m5-bars','setting-atr-period','setting-atr-sl','setting-atr-tp','setting-breakeven','setting-trailing-trigger','setting-trailing-atr','setting-ai-score','setting-ai-cooldown','setting-ai-quick-tokens','setting-ai-quick-timeout','setting-ai-full-tokens','setting-ai-full-timeout'];
                 for (const id of requiredIds) {
                     const el = document.getElementById(id);
                     if (!el || el.value === '' || Number.isNaN(Number(el.value))) throw new Error('Valeur manquante ou invalide: ' + id);
