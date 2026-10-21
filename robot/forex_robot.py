@@ -929,7 +929,10 @@ def manage_position_protection(position):
         if tick is None:
             return
         current = float(tick.bid if action == "BUY" else tick.ask)
-        initial_r = abs(entry - current_sl) if current_sl > 0 else atr * runtime_cfg("atr_sl_multiplier", ATR_SL_MULTIPLIER)
+        # 1R = distance initiale du SL (ATR x multiplicateur). On ne la deduit pas du SL
+        # courant : apres le break-even il vaut le prix d'entree (R = 0) et le
+        # trailing ne se declenchait plus jamais.
+        initial_r = atr * runtime_cfg("atr_sl_multiplier", ATR_SL_MULTIPLIER)
         if initial_r <= 0:
             return
         favorable = (current - entry) if action == "BUY" else (entry - current)
@@ -959,7 +962,14 @@ def manage_position_protection(position):
 
 def analyze_symbol_score(symbol: str) -> Dict:
     prices = get_historical_prices(symbol, 30)
+    return score_from_prices(symbol, prices)
 
+
+def score_from_prices(symbol: str, prices: np.ndarray) -> Dict:
+    """Score technique a partir des cloture H1 des 30 derniers jours (sans appel MT5).
+
+    Separe de analyze_symbol_score pour que le backtest rejoue exactement ce calcul.
+    """
     if len(prices) < 30:
         return {"symbol": symbol, "score": 0, "action": "NONE", "confidence": 0, "error": "Pas assez de donnees"}
 

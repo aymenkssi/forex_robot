@@ -28,6 +28,8 @@ Internet ─443─> Traefik (Docker) ─> iamrobot-proxy (Nginx Docker) ─> hos
 | `docker-compose.yml`, `nginx/default.conf` | Proxy publié par Traefik |
 | `deploy/systemd/` | Modèles des services `forex-robot` et `mt5-bridge` |
 | `deploy/migrate_to_opt.sh` | Migration `/root/forex-robot` → `/opt/apps/iamrobot` |
+| `robot/config.recommended.json` | Configuration recommandée, appliquée au démarrage à chaque nouvelle version |
+| `tools/backtest.py` | Backtest de la stratégie sur l'historique MT5 |
 
 Non versionnés (voir `.gitignore`) : `robot/config.json` (token Telegram),
 `robot/users.json` (comptes de l'interface), `bridge/*.exe`, `.venv/`.
@@ -69,3 +71,18 @@ systemctl --user status mt5-bridge --no-pager
 journalctl -u forex-robot -n 50 --no-pager
 docker exec iamrobot-proxy wget -qO- http://host.docker.internal:8001/api/auth/status
 ```
+
+## Backtest
+
+Rejoue la logique du robot (score H1, filtres MTF/spread/session, SL/TP ATR, break-even,
+trailing, inversion, limites de portefeuille) sur l'historique MT5, pour plusieurs variantes
+de réglages. Aucun ordre n'est envoyé ; Mistral et le calendrier ne sont pas simulés.
+
+```bash
+cd /opt/apps/iamrobot
+.venv/bin/python tools/backtest.py                    # 6 derniers mois, 28 paires
+.venv/bin/python tools/backtest.py --months 12 --extra-spread 3
+```
+
+Résultats exprimés en R (1R = risque d'un trade) et en % du capital avec le risque configuré.
+Détail dans `backtest_results/` (non versionné).

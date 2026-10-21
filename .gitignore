@@ -16,3 +16,7 @@ bridge/*.exe
 # Logs et sauvegardes
 *.log
 backups/
+
+# Donnees du backtest
+backtest_data/
+backtest_results/
