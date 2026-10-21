@@ -469,8 +469,8 @@
                 <div class="mb-8">
                     <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-line text-green-400"></i>Trading</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div><label class="block text-gray-400 text-sm mb-2">Taille du lot</label><input type="number" id="setting-lot" step="0.01" min="0.01" max="10" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0.01 à 10 lots</p></div>
-                        <div><label class="block text-gray-400 text-sm mb-2">Objectif Profit ($)</label><input type="number" id="setting-target" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Objectif de fermeture par position</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Lot maximum par trade</label><input type="number" id="setting-lot" step="0.01" min="0.01" max="10" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond : le lot réel est calculé selon le risque par trade</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Objectif Profit ($)</label><input type="number" id="setting-target" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (recommandé : TP/trailing ATR). Ignoré s'il est inférieur au risque par trade</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Stop Loss monétaire ($)</label><input type="number" id="setting-sl" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (le SL broker ATR reste indépendant)</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Score minimum</label><input type="number" id="setting-score" min="1" max="10" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Score technique requis</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Intervalle d'analyse (s)</label><input type="number" id="setting-interval" min="10" max="600" step="5" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Fréquence du cycle automatique</p></div>
@@ -511,7 +511,14 @@
                         <div><label class="block text-gray-400 text-sm mb-2">DD : bloquer nouvelles entrées (%)</label><input type="number" id="setting-dd-new" min="0" max="100" step="0.1" class="input-dark mono"></div>
                         <div><label class="block text-gray-400 text-sm mb-2">DD : arrêt automatique (%)</label><input type="number" id="setting-dd-stop" min="0" max="100" step="0.1" class="input-dark mono"></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Blackout news HIGH (min)</label><input type="number" id="setting-news-blackout" min="0" max="240" step="1" class="input-dark mono"></div>
-                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">SL broker obligatoire</div><div class="text-xs text-gray-500">Refuse toute ouverture sans SL MT5</div></div><input type="checkbox" id="setting-broker-sl" class="w-5 h-5 rounded"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Pause après news HIGH (min)</label><input type="number" id="setting-news-after" min="0" max="240" step="1" class="input-dark mono"></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Risque par trade (% du capital)</label><input type="number" id="setting-risk-pct" min="0.05" max="5" step="0.05" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Perte maximale si le SL est touché</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Perte max journalière (%)</label><input type="number" id="setting-daily-loss" min="0" max="50" step="0.5" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Bloque les nouvelles entrées jusqu'au lendemain (0 = désactivé)</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Score d'inversion (fermeture)</label><input type="number" id="setting-reversal-score" min="1" max="10" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Ferme une position si le signal opposé atteint ce score</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Durée min avant inversion (min)</label><input type="number" id="setting-reversal-hold" min="0" max="1440" step="5" class="input-dark mono"></div>
+                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">Fermer sur inversion</div><div class="text-xs text-gray-500">Sortie si le signal s'inverse fortement</div></div><input type="checkbox" id="setting-close-reversal" class="w-5 h-5 rounded"></div>
+                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">Pause rollover / vendredi soir</div><div class="text-xs text-gray-500">Pas d'entrée 23h-01h et vendredi après 21h (heure serveur)</div></div><input type="checkbox" id="setting-block-rollover" class="w-5 h-5 rounded"></div>
+                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">SL broker obligatoire</div><div class="text-xs text-gray-500">Toujours actif : aucune ouverture sans SL MT5</div></div><input type="checkbox" id="setting-broker-sl" class="w-5 h-5 rounded" checked disabled></div>
                     </div>
                 </div>
 
@@ -1199,6 +1206,13 @@
                 setField('setting-dd-stop', cfg.auto_stop_drawdown_pct);
                 setField('setting-news-blackout', cfg.news_blackout_minutes);
                 setCheck('setting-broker-sl', cfg.broker_sl_required);
+                setField('setting-news-after', cfg.news_after_minutes);
+                setField('setting-risk-pct', cfg.risk_per_trade_pct);
+                setField('setting-daily-loss', cfg.daily_loss_limit_pct);
+                setField('setting-reversal-score', cfg.reversal_min_score);
+                setField('setting-reversal-hold', cfg.reversal_min_hold_minutes);
+                setCheck('setting-close-reversal', cfg.close_on_reversal);
+                setCheck('setting-block-rollover', cfg.block_rollover);
 
                 setField('setting-m15-bars', cfg.m15_min_bars);
                 setField('setting-m5-bars', cfg.m5_min_bars);
@@ -1665,7 +1679,14 @@
                 max_drawdown_new_trades_pct: parseFloat(document.getElementById('setting-dd-new').value),
                 auto_stop_drawdown_pct: parseFloat(document.getElementById('setting-dd-stop').value),
                 news_blackout_minutes: parseInt(document.getElementById('setting-news-blackout').value),
-                broker_sl_required: document.getElementById('setting-broker-sl').checked,
+                broker_sl_required: true,
+                news_after_minutes: parseInt(document.getElementById('setting-news-after').value),
+                risk_per_trade_pct: parseFloat(document.getElementById('setting-risk-pct').value),
+                daily_loss_limit_pct: parseFloat(document.getElementById('setting-daily-loss').value),
+                reversal_min_score: parseInt(document.getElementById('setting-reversal-score').value),
+                reversal_min_hold_minutes: parseInt(document.getElementById('setting-reversal-hold').value),
+                close_on_reversal: document.getElementById('setting-close-reversal').checked,
+                block_rollover: document.getElementById('setting-block-rollover').checked,
                 m15_min_bars: parseInt(document.getElementById('setting-m15-bars').value),
                 m5_min_bars: parseInt(document.getElementById('setting-m5-bars').value),
                 atr_period: parseInt(document.getElementById('setting-atr-period').value),
@@ -1707,7 +1728,7 @@
             if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return false; }
             try {
                 collectConfig();
-                const requiredIds = ['setting-lot','setting-target','setting-sl','setting-score','setting-interval','setting-maxpos','setting-hard-maxpos','setting-max-exposure','setting-trade-cooldown','setting-max-spread','setting-dd-new','setting-dd-stop','setting-news-blackout','setting-m15-bars','setting-m5-bars','setting-atr-period','setting-atr-sl','setting-atr-tp','setting-breakeven','setting-trailing-trigger','setting-trailing-atr','setting-ai-score','setting-ai-cooldown','setting-ai-quick-tokens','setting-ai-quick-timeout','setting-ai-full-tokens','setting-ai-full-timeout'];
+                const requiredIds = ['setting-lot','setting-target','setting-sl','setting-score','setting-interval','setting-maxpos','setting-hard-maxpos','setting-max-exposure','setting-trade-cooldown','setting-max-spread','setting-dd-new','setting-dd-stop','setting-news-blackout','setting-news-after','setting-risk-pct','setting-daily-loss','setting-reversal-score','setting-reversal-hold','setting-m15-bars','setting-m5-bars','setting-atr-period','setting-atr-sl','setting-atr-tp','setting-breakeven','setting-trailing-trigger','setting-trailing-atr','setting-ai-score','setting-ai-cooldown','setting-ai-quick-tokens','setting-ai-quick-timeout','setting-ai-full-tokens','setting-ai-full-timeout'];
                 for (const id of requiredIds) {
                     const el = document.getElementById(id);
                     if (!el || el.value === '' || Number.isNaN(Number(el.value))) throw new Error('Valeur manquante ou invalide: ' + id);

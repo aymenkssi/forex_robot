@@ -71,6 +71,14 @@ TRAILING_TRIGGER_R = 1.5
 TRAILING_ATR_MULTIPLIER = 1.0
 BROKER_SL_REQUIRED = True
 NEWS_BLACKOUT_MINUTES = 30
+NEWS_AFTER_MINUTES = 15
+RISK_PER_TRADE_PCT = 0.5
+DAILY_LOSS_LIMIT_PCT = 3.0
+CLOSE_ON_REVERSAL = True
+REVERSAL_MIN_SCORE = 4
+REVERSAL_MIN_HOLD_MINUTES = 30
+BLOCK_ROLLOVER = True
+ROBOT_MAGIC = 202401
 
 # ============ CONFIGURATION ============
 CONFIG = {
@@ -138,6 +146,17 @@ CONFIG = {
     "trailing_atr_multiplier": 1.0,
     "broker_sl_required": True,
     "news_blackout_minutes": 30,
+    "news_after_minutes": 15,
+    # Taille de position calculee pour risquer ce % du capital (lot_size = plafond).
+    "risk_per_trade_pct": 0.5,
+    # Perte max de la journee (equity) avant blocage des nouvelles entrees.
+    "daily_loss_limit_pct": 3.0,
+    # Fermeture d'une position du robot si le signal s'inverse fortement.
+    "close_on_reversal": True,
+    "reversal_min_score": 4,
+    "reversal_min_hold_minutes": 30,
+    # Pas de nouvelle entree autour du rollover et le vendredi soir (heure serveur).
+    "block_rollover": True,
 
     # Telegram Alerts
     "telegram_bot_token": "",
@@ -165,6 +184,9 @@ PERSISTENT_CONFIG_KEYS = {
     "m15_min_bars", "m5_min_bars", "atr_period", "atr_sl_multiplier",
     "atr_tp_multiplier", "breakeven_trigger_r", "trailing_trigger_r",
     "trailing_atr_multiplier", "broker_sl_required", "news_blackout_minutes",
+    "news_after_minutes", "risk_per_trade_pct", "daily_loss_limit_pct",
+    "close_on_reversal", "reversal_min_score", "reversal_min_hold_minutes",
+    "block_rollover",
     "telegram_bot_token", "telegram_chat_id", "telegram_enabled",
     "telegram_on_open", "telegram_on_close", "telegram_on_target",
     "telegram_on_stoploss", "telegram_on_analysis",
@@ -221,7 +243,8 @@ def load_persistent_config() -> bool:
                 "ai_auto_cooldown", "ai_quick_num_predict", "ai_quick_timeout",
                 "ai_full_num_predict", "ai_full_timeout", "hard_max_positions",
                 "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
-                "m15_min_bars", "m5_min_bars", "atr_period"
+                "m15_min_bars", "m5_min_bars", "atr_period",
+                "news_after_minutes", "reversal_min_score", "reversal_min_hold_minutes"
             }:
                 CONFIG[key] = int(value)
                 if key == "hard_max_positions":
@@ -231,12 +254,13 @@ def load_persistent_config() -> bool:
             elif key in {
                 "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
                 "trailing_trigger_r", "trailing_atr_multiplier",
-                "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct"
+                "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+                "risk_per_trade_pct", "daily_loss_limit_pct"
             }:
                 CONFIG[key] = float(value)
             elif key in {
                 "use_ai_analysis", "telegram_enabled",
-                "broker_sl_required",
+                "broker_sl_required", "close_on_reversal", "block_rollover",
                 "telegram_on_open", "telegram_on_close",
                 "telegram_on_target", "telegram_on_stoploss",
                 "telegram_on_analysis"
@@ -248,6 +272,9 @@ def load_persistent_config() -> bool:
         # Normalisation finale apres chargement.
         CONFIG["hard_max_positions"] = max(1, min(int(CONFIG.get("hard_max_positions", HARD_MAX_POSITIONS)), 20))
         CONFIG["max_positions"] = max(1, min(int(CONFIG.get("max_positions", 1)), CONFIG["hard_max_positions"]))
+        # Le SL broker n'est plus desactivable : sans SL, une seule position peut
+        # effacer des dizaines de gains (cause des pertes constatees en demo).
+        CONFIG["broker_sl_required"] = True
         logger.info("Configuration chargee depuis %s", CONFIG_FILE)
         return True
     except Exception as e:
@@ -684,6 +711,97 @@ def trade_cooldown_allows(symbol: str) -> tuple[bool, str]:
     return True, "Cooldown OK"
 
 
+def calculate_risk_volume(symbol_info, entry: float, sl: float, account) -> Optional[float]:
+    """Volume pour risquer risk_per_trade_pct du capital entre entree et SL.
+
+    Arrondi a l'inferieur sur le pas du broker afin de ne jamais depasser le
+    risque vise, et plafonne par lot_size. None si meme le lot minimum
+    risquerait davantage que prevu.
+    """
+    if account is None:
+        return None
+    capital = min(float(account.balance), float(account.equity))
+    risk_money = capital * float(runtime_cfg("risk_per_trade_pct", RISK_PER_TRADE_PCT)) / 100.0
+    tick_size = float(getattr(symbol_info, "trade_tick_size", 0) or 0)
+    tick_value = float(getattr(symbol_info, "trade_tick_value", 0) or 0)
+    distance = abs(float(entry) - float(sl))
+    if risk_money <= 0 or tick_size <= 0 or tick_value <= 0 or distance <= 0:
+        return None
+
+    loss_per_lot = distance / tick_size * tick_value
+    minimum = float(getattr(symbol_info, "volume_min", 0.01) or 0.01)
+    maximum = float(getattr(symbol_info, "volume_max", 100.0) or 100.0)
+    step = float(getattr(symbol_info, "volume_step", 0.01) or 0.01)
+    cap = min(maximum, float(CONFIG.get("lot_size", maximum)))
+
+    raw = min(risk_money / loss_per_lot, cap)
+    volume = round(int(raw / step + 1e-9) * step, 8)
+    if volume < minimum:
+        logger.warning(
+            "Volume refuse %s: lot min %.2f risquerait %.2f > %.2f (%.2f%%)",
+            symbol_info.name, minimum, minimum * loss_per_lot, risk_money,
+            float(runtime_cfg("risk_per_trade_pct", RISK_PER_TRADE_PCT)),
+        )
+        return None
+    return volume
+
+
+def server_time_now() -> Optional[datetime]:
+    """Heure du serveur broker (les timestamps MT5 sont exprimes en heure serveur)."""
+    try:
+        tick = mt5.symbol_info_tick("EURUSD")
+        if tick is None or not getattr(tick, "time", 0):
+            return None
+        return datetime.fromtimestamp(int(tick.time), tz=timezone.utc).replace(tzinfo=None)
+    except Exception:
+        return None
+
+
+def trading_session_allows() -> tuple[bool, str]:
+    """Bloque les entrees autour du rollover (spreads larges) et le vendredi soir."""
+    if not runtime_cfg("block_rollover", BLOCK_ROLLOVER):
+        return True, "Session OK"
+    now = server_time_now()
+    if now is None:
+        return True, "Heure serveur indisponible"
+    if now.hour in (23, 0):
+        return False, f"Rollover ({now:%H:%M} serveur)"
+    if now.weekday() == 4 and now.hour >= 21:
+        return False, f"Vendredi soir ({now:%H:%M} serveur)"
+    return True, "Session OK"
+
+
+def daily_loss_allows(account) -> tuple[bool, str]:
+    """Bloque les nouvelles entrees si la perte du jour depasse la limite."""
+    limit = float(runtime_cfg("daily_loss_limit_pct", DAILY_LOSS_LIMIT_PCT))
+    if limit <= 0 or account is None:
+        return True, "Perte journaliere OK"
+    today = (server_time_now() or datetime.now(timezone.utc)).date()
+    if state.get("day") != today or not state.get("day_start_equity"):
+        state["day"] = today
+        state["day_start_equity"] = float(account.equity)
+    start = float(state["day_start_equity"])
+    loss_pct = (start - float(account.equity)) / start * 100.0 if start > 0 else 0.0
+    if loss_pct >= limit:
+        return False, f"Perte du jour {loss_pct:.2f}% >= {limit}%"
+    return True, "Perte journaliere OK"
+
+
+def emergency_close_all(reason: str) -> int:
+    """Ferme toutes les positions du robot et arrete l'auto-trading."""
+    closed = 0
+    for pos in list(mt5.positions_get() or []):
+        if int(getattr(pos, "magic", 0) or 0) != ROBOT_MAGIC:
+            continue
+        if close_position(int(pos.ticket)):
+            closed += 1
+    state["auto_trading"] = False
+    state["risk_block_reason"] = f"ARRET D'URGENCE: {reason}"
+    logger.error("ARRET D'URGENCE | %s | %s position(s) fermee(s)", reason, closed)
+    send_telegram(f"<b>ARRET D'URGENCE</b>\n{reason}\n{closed} position(s) fermee(s), auto-trading arrete.")
+    return closed
+
+
 def modify_position_sl_tp(position, sl: Optional[float] = None, tp: Optional[float] = None) -> bool:
     """Modifie le SL/TP d'une position MT5 sans la fermer."""
     try:
@@ -693,7 +811,7 @@ def modify_position_sl_tp(position, sl: Optional[float] = None, tp: Optional[flo
             "position": int(position.ticket),
             "sl": float(sl if sl is not None else getattr(position, "sl", 0) or 0),
             "tp": float(tp if tp is not None else getattr(position, "tp", 0) or 0),
-            "magic": 202401,
+            "magic": ROBOT_MAGIC,
         }
         result = mt5.order_send(request)
         if result is None:
@@ -966,29 +1084,6 @@ def normalize_volume(symbol_info, requested: float) -> float:
     return round(max(minimum, min(maximum, volume)), 8)
 
 
-def calculate_stop_price(symbol_info, tick, action: str, volume: float, money: float, is_loss: bool):
-    """Convertit un montant EUR/USD approximatif en distance de prix MT5."""
-    if not money or money <= 0:
-        return None
-
-    tick_size = float(getattr(symbol_info, "trade_tick_size", 0) or 0)
-    tick_value = float(getattr(symbol_info, "trade_tick_value", 0) or 0)
-    if tick_size <= 0 or tick_value <= 0 or volume <= 0:
-        return None
-
-    price_distance = (float(money) / (tick_value * volume)) * tick_size
-    digits = int(getattr(symbol_info, "digits", 5))
-
-    if action == "BUY":
-        price = float(tick.ask)
-        result = price - price_distance if is_loss else price + price_distance
-    else:
-        price = float(tick.bid)
-        result = price + price_distance if is_loss else price - price_distance
-
-    return round(result, digits)
-
-
 def get_historical_prices(symbol: str, days: int = 30) -> np.ndarray:
     if not state["connected"]:
         return np.array([])
@@ -1040,7 +1135,7 @@ def get_economic_calendar() -> list:
                 try:
                     event_time = datetime.strptime(event.get('date', ''), '%Y-%m-%dT%H:%M:%S%z')
                     time_diff = (event_time - now).total_seconds() / 60
-                    if 0 <= time_diff <= 120:
+                    if -runtime_cfg("news_after_minutes", NEWS_AFTER_MINUTES) <= time_diff <= 120:
                         upcoming.append({
                             "title": event.get('title', ''),
                             "country": event.get('country', ''),
@@ -1156,58 +1251,30 @@ def open_trade(symbol: str, action: str, comment: str = "", requested_volume: fl
             logger.warning("Action invalide: %s", action)
             return None
 
-        volume = normalize_volume(symbol_info, requested_volume if requested_volume is not None else CONFIG["lot_size"])
         price = float(tick.ask if action == "BUY" else tick.bid)
 
-        # SL/TP BROKER reels : priorite aux valeurs calculees par le moteur de risque.
-        broker_sl_required = bool(
-            runtime_cfg("broker_sl_required", BROKER_SL_REQUIRED)
-        )
-
-        # SL broker ATR uniquement si la protection broker est active.
-        if broker_sl_required:
-            if sl_price is None:
-                calc_sl, _ = calculate_atr_sl_tp(
-                    symbol_info,
-                    tick,
-                    action,
-                    volume,
-                    atr,
-                )
-                sl_price = calc_sl
-
-        # TP indépendant du SL.
-        if tp_price is None:
-            _, calc_tp = calculate_atr_sl_tp(
-                symbol_info,
-                tick,
-                action,
-                volume,
-                atr,
+        # SL broker TOUJOURS obligatoire, calcule sur l'ATR M15 si absent.
+        if atr <= 0:
+            atr = calculate_atr_from_rates(
+                get_historical_rates(symbol, mt5.TIMEFRAME_M15, 60),
+                runtime_cfg("atr_period", ATR_PERIOD),
             )
+        calc_sl, calc_tp = calculate_atr_sl_tp(symbol_info, tick, action, 0.0, atr)
+        if sl_price is None:
+            sl_price = calc_sl
+        if tp_price is None:
             tp_price = calc_tp
-
-        # Filet de sécurité : aucun ordre sans SL lorsque
-        # la protection broker est obligatoire.
-        if broker_sl_required and (
-            sl_price is None or float(sl_price) <= 0
-        ):
-            logger.error(
-                "OUVERTURE BLOQUEE %s: impossible de calculer un SL broker",
-                symbol,
-            )
-            return None
-
-        # Dernier filet de securite : le robot ne doit pas ouvrir sans SL si le mode
-        # protege est active. On utilise le SL monetaire historique uniquement si necessaire.
-        if sl_price is None and runtime_cfg("broker_sl_required", BROKER_SL_REQUIRED):
-            sl_price = calculate_stop_price(symbol_info, tick, action, volume, CONFIG.get("stop_loss", 0), True)
-        if tp_price is None:
-            tp_price = calculate_stop_price(symbol_info, tick, action, volume, CONFIG.get("target_profit", 0), False)
-
-        if runtime_cfg("broker_sl_required", BROKER_SL_REQUIRED) and (sl_price is None or float(sl_price) <= 0):
+        if sl_price is None or float(sl_price) <= 0:
             logger.error("OUVERTURE BLOQUEE %s: impossible de calculer un SL broker", symbol)
             return None
+
+        # Volume : impose par l'appelant (trade manuel) ou calcule selon le risque.
+        if requested_volume is not None:
+            volume = normalize_volume(symbol_info, requested_volume)
+        else:
+            volume = calculate_risk_volume(symbol_info, price, float(sl_price), mt5.account_info())
+            if volume is None:
+                return None
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -1216,7 +1283,7 @@ def open_trade(symbol: str, action: str, comment: str = "", requested_volume: fl
             "type": order_type,
             "price": price,
             "deviation": 20,
-            "magic": 202401,
+            "magic": ROBOT_MAGIC,
             "comment": comment or "ForexRobot",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
@@ -1294,7 +1361,7 @@ def close_position(ticket: int) -> bool:
             "position": ticket,
             "price": price,
             "deviation": 20,
-            "magic": 202401,
+            "magic": ROBOT_MAGIC,
             "comment": "ForexRobot close",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
@@ -1346,16 +1413,23 @@ def find_best_opportunity() -> Optional[Dict]:
 
     return best
 
-def economic_news_allows_trade(events: list) -> tuple[bool, str]:
-    """Bloque les nouvelles entrees avant un evenement forex a fort impact."""
+def economic_news_allows_trade(events: list, symbol: str = "") -> tuple[bool, str]:
+    """Bloque les entrees avant et juste apres une annonce HIGH sur une devise de la paire."""
+    currencies = {symbol[:3], symbol[3:6]} if len(symbol) >= 6 else set()
+    before = runtime_cfg("news_blackout_minutes", NEWS_BLACKOUT_MINUTES)
+    after = runtime_cfg("news_after_minutes", NEWS_AFTER_MINUTES)
     for event in events or []:
         impact = str(event.get("impact", "")).lower()
+        country = str(event.get("country", "")).upper()
+        if currencies and country and country != "ALL" and country not in currencies:
+            continue
         try:
             minutes = float(event.get("minutes_until", 9999))
         except Exception:
             minutes = 9999
-        if impact == "high" and 0 <= minutes <= runtime_cfg("news_blackout_minutes", NEWS_BLACKOUT_MINUTES):
-            return False, f"News HIGH dans {int(minutes)} min: {event.get('title', 'evenement')}"
+        if impact == "high" and -after <= minutes <= before:
+            when = f"dans {int(minutes)} min" if minutes >= 0 else f"il y a {int(-minutes)} min"
+            return False, f"News HIGH {country} {when}: {event.get('title', 'evenement')}"
     return True, "News filter OK"
 
 
@@ -1374,13 +1448,22 @@ def evaluate_new_trade_risk(account, portfolio: Dict, opportunity: Dict, action:
         state["risk_block_reason"] = reason
         return False, reason, {}
 
-    news_ok, news_reason = economic_news_allows_trade(events or [])
-    if not news_ok:
-        return False, news_reason, {}
+    daily_ok, daily_reason = daily_loss_allows(account)
+    if not daily_ok:
+        state["risk_block_reason"] = daily_reason
+        return False, daily_reason, {}
+
+    session_ok, session_reason = trading_session_allows()
+    if not session_ok:
+        return False, session_reason, {}
 
     symbol = str(opportunity.get("symbol", ""))
     if not symbol:
         return False, "Symbole absent", {}
+
+    news_ok, news_reason = economic_news_allows_trade(events or [], symbol)
+    if not news_ok:
+        return False, news_reason, {}
 
     cooldown_ok, cooldown_reason = trade_cooldown_allows(symbol)
     if not cooldown_ok:
@@ -1406,12 +1489,40 @@ def evaluate_new_trade_risk(account, portfolio: Dict, opportunity: Dict, action:
     return True, "Risk + MTF + spread OK", mtf
 
 
-def manage_open_positions(positions: list):
-    """Gere les objectifs, le stop logique et la protection BE/trailing."""
+def reversal_requires_close(pos) -> tuple[bool, str]:
+    """Signal technique fortement oppose a une position du robot detenue assez longtemps."""
+    if not runtime_cfg("close_on_reversal", CLOSE_ON_REVERSAL):
+        return False, ""
+    if int(getattr(pos, "magic", 0) or 0) != ROBOT_MAGIC:
+        return False, ""
+    now = server_time_now()
+    if now is None:
+        return False, ""
+    held_minutes = (now - datetime.fromtimestamp(int(pos.time), tz=timezone.utc).replace(tzinfo=None)).total_seconds() / 60
+    if held_minutes < runtime_cfg("reversal_min_hold_minutes", REVERSAL_MIN_HOLD_MINUTES):
+        return False, ""
+    analysis = analyze_symbol_score(str(pos.symbol))
+    score = float(analysis.get("score", 0) or 0)
+    threshold = runtime_cfg("reversal_min_score", REVERSAL_MIN_SCORE)
+    is_buy = int(pos.type) == 0
+    if (is_buy and score <= -threshold) or (not is_buy and score >= threshold):
+        return True, f"signal inverse {analysis.get('action')} (score {score:g})"
+    return False, ""
+
+
+def manage_open_positions(positions: list, account=None):
+    """Gere les objectifs, le stop logique, l'inversion et la protection BE/trailing."""
+    # Un objectif $ inferieur au risque pris recree un ratio gain/perte perdant :
+    # il n'est applique que s'il vaut au moins le risque par trade.
+    risk_money = 0.0
+    if account is not None:
+        risk_money = float(account.balance) * float(runtime_cfg("risk_per_trade_pct", RISK_PER_TRADE_PCT)) / 100.0
+    target = float(CONFIG.get("target_profit", 0) or 0)
+    target_active = target > 0 and target >= risk_money
     for pos in positions:
         try:
             profit = float(getattr(pos, "profit", 0.0) or 0.0)
-            if profit >= CONFIG["target_profit"] > 0:
+            if target_active and profit >= target:
                 print(f"  TARGET {pos.symbol}: +${profit:.2f} -> fermeture")
                 if CONFIG.get("telegram_on_target"):
                     send_telegram(f"<b>OBJECTIF ATTEINT!</b>\\n{pos.symbol} | Profit: <b>+${profit:.2f}</b>")
@@ -1422,6 +1533,12 @@ def manage_open_positions(positions: list):
                 if CONFIG.get("telegram_on_stoploss"):
                     send_telegram(f"<b>STOP LOSS LOGIQUE</b>\\n{pos.symbol} | Perte: <b>${profit:.2f}</b>")
                 close_position(pos.ticket)
+                continue
+            reverse, reverse_reason = reversal_requires_close(pos)
+            if reverse:
+                print(f"  INVERSION {pos.symbol}: {reverse_reason} -> fermeture (${profit:.2f})")
+                if close_position(pos.ticket):
+                    send_telegram(f"<b>FERMETURE SUR INVERSION</b>\n{pos.symbol} | {reverse_reason} | ${profit:.2f}")
                 continue
             manage_position_protection(pos)
         except Exception as e:
@@ -1460,8 +1577,14 @@ def auto_trader_loop():
             drawdown = get_current_drawdown_pct(account)
             print(f"\n[{current_time}] Balance: ${account.balance:.2f} | Equity: ${account.equity:.2f} | DD instantane: {drawdown:.2f}%")
 
+            if drawdown >= runtime_cfg("auto_stop_drawdown_pct", AUTO_STOP_DRAWDOWN_PCT):
+                emergency_close_all(
+                    f"drawdown {drawdown:.2f}% >= {runtime_cfg('auto_stop_drawdown_pct', AUTO_STOP_DRAWDOWN_PCT)}%"
+                )
+                break
+
             # Gestion continue des positions existantes, meme si les nouvelles entrees sont bloquees.
-            manage_open_positions(positions)
+            manage_open_positions(positions, account)
 
             positions = list(mt5.positions_get() or [])
             portfolio = get_ai_portfolio()
@@ -2014,6 +2137,13 @@ async def api_get_config():
             "trailing_atr_multiplier": CONFIG["trailing_atr_multiplier"],
             "broker_sl_required": CONFIG["broker_sl_required"],
             "news_blackout_minutes": CONFIG["news_blackout_minutes"],
+            "news_after_minutes": CONFIG["news_after_minutes"],
+            "risk_per_trade_pct": CONFIG["risk_per_trade_pct"],
+            "daily_loss_limit_pct": CONFIG["daily_loss_limit_pct"],
+            "close_on_reversal": CONFIG["close_on_reversal"],
+            "reversal_min_score": CONFIG["reversal_min_score"],
+            "reversal_min_hold_minutes": CONFIG["reversal_min_hold_minutes"],
+            "block_rollover": CONFIG["block_rollover"],
         }
     }
 
@@ -2052,6 +2182,13 @@ async def api_update_config(body: dict):
         "trailing_atr_multiplier": "trailing_atr_multiplier",
         "broker_sl_required": "broker_sl_required",
         "news_blackout_minutes": "news_blackout_minutes",
+        "news_after_minutes": "news_after_minutes",
+        "risk_per_trade_pct": "risk_per_trade_pct",
+        "daily_loss_limit_pct": "daily_loss_limit_pct",
+        "close_on_reversal": "close_on_reversal",
+        "reversal_min_score": "reversal_min_score",
+        "reversal_min_hold_minutes": "reversal_min_hold_minutes",
+        "block_rollover": "block_rollover",
         "ollama_url": "ollama_url",
         "ollama_model": "ollama_model",
         "use_ai_analysis": "use_ai_analysis",
@@ -2068,15 +2205,16 @@ async def api_update_config(body: dict):
         "trade_cooldown_minutes", "max_spread_points",
         "m15_min_bars", "m5_min_bars", "atr_period",
         "sma_fast", "sma_slow", "news_blackout_minutes",
+        "news_after_minutes", "reversal_min_score", "reversal_min_hold_minutes",
     }
     float_keys = {
         "lot_size", "target_profit", "stop_loss",
         "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
         "atr_sl_multiplier", "atr_tp_multiplier",
         "breakeven_trigger_r", "trailing_trigger_r",
-        "trailing_atr_multiplier",
+        "trailing_atr_multiplier", "risk_per_trade_pct", "daily_loss_limit_pct",
     }
-    bool_keys = {"broker_sl_required", "use_ai_analysis"}
+    bool_keys = {"broker_sl_required", "use_ai_analysis", "close_on_reversal", "block_rollover"}
 
     for frontend_key, config_key in direct_keys.items():
         if frontend_key not in body:
@@ -2124,6 +2262,12 @@ async def api_update_config(body: dict):
     CONFIG["ai_full_num_predict"] = max(32, min(int(CONFIG["ai_full_num_predict"]), 1024))
     CONFIG["ai_full_timeout"] = max(10, min(int(CONFIG["ai_full_timeout"]), 300))
     CONFIG["news_blackout_minutes"] = max(0, min(int(CONFIG["news_blackout_minutes"]), 240))
+    CONFIG["news_after_minutes"] = max(0, min(int(CONFIG["news_after_minutes"]), 240))
+    CONFIG["risk_per_trade_pct"] = max(0.05, min(float(CONFIG["risk_per_trade_pct"]), 5.0))
+    CONFIG["daily_loss_limit_pct"] = max(0.0, min(float(CONFIG["daily_loss_limit_pct"]), 50.0))
+    CONFIG["reversal_min_score"] = max(1, min(int(CONFIG["reversal_min_score"]), 10))
+    CONFIG["reversal_min_hold_minutes"] = max(0, min(int(CONFIG["reversal_min_hold_minutes"]), 1440))
+    CONFIG["broker_sl_required"] = True
     CONFIG["rsi_period"] = max(5, min(int(CONFIG["rsi_period"]), 50))
     CONFIG["rsi_oversold"] = max(5, min(int(CONFIG["rsi_oversold"]), 49))
     CONFIG["rsi_overbought"] = max(CONFIG["rsi_oversold"] + 1, min(int(CONFIG["rsi_overbought"]), 95))
@@ -2171,7 +2315,9 @@ async def api_update_config(body: dict):
                 "m15_min_bars", "m5_min_bars", "atr_period",
                 "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
                 "trailing_trigger_r", "trailing_atr_multiplier", "broker_sl_required",
-                "news_blackout_minutes"
+                "news_blackout_minutes", "news_after_minutes", "risk_per_trade_pct",
+                "daily_loss_limit_pct", "close_on_reversal", "reversal_min_score",
+                "reversal_min_hold_minutes", "block_rollover"
             ]
         },
     }
@@ -2216,6 +2362,9 @@ async def api_risk_status():
         "m5_min_bars": int(runtime_cfg("m5_min_bars", M5_MIN_BARS)),
         "ai_validation_min_score": int(runtime_cfg("ai_validation_min_score", AI_VALIDATION_MIN_SCORE)),
         "ai_auto_cooldown": int(runtime_cfg("ai_auto_cooldown", AI_AUTO_COOLDOWN)),
+        "risk_per_trade_pct": float(runtime_cfg("risk_per_trade_pct", RISK_PER_TRADE_PCT)),
+        "daily_loss_limit_pct": float(runtime_cfg("daily_loss_limit_pct", DAILY_LOSS_LIMIT_PCT)),
+        "day_start_equity": state.get("day_start_equity"),
         "risk_block_reason": risk_reason,
         "session_start_balance": state.get("session_start_balance"),
     }
