@@ -1985,7 +1985,8 @@
                 '</div>';
 
             try {
-                var response = await fetch(API_URL + '/ai/full-analysis', { cache: 'no-store' });
+                // Bouton explicite : on force une nouvelle analyse (sinon cache serveur de 5 min).
+                var response = await fetch(API_URL + '/ai/full-analysis?refresh=true', { cache: 'no-store' });
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 var data = await response.json();
 
@@ -2433,7 +2434,8 @@
 
         let aiAnalysisInProgress = false;
         let lastAIAnalysisAt = 0;
-        const AI_REFRESH_INTERVAL_MS = 60000;
+        // Le serveur met l'analyse complete en cache 5 min : inutile de la redemander plus souvent.
+        const AI_REFRESH_INTERVAL_MS = 300000;
 
         async function refreshDashboardV2(forceAI = false) {
             await Promise.allSettled([

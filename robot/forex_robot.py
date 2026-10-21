@@ -38,6 +38,11 @@ logger = logging.getLogger(__name__)
 OLLAMA_GENERATION_LOCK = threading.Lock()
 OLLAMA_STATUS_CACHE = {"timestamp": 0.0, "data": None}
 OLLAMA_STATUS_CACHE_TTL = 15
+# L'analyse complete du tableau de bord (30-60 s de CPU) est mise en cache pour
+# ne pas monopoliser Ollama a chaque rafraichissement de l'interface.
+FULL_ANALYSIS_CACHE = {"timestamp": 0.0, "data": None}
+FULL_ANALYSIS_CACHE_TTL = 300
+FULL_ANALYSIS_LOCK = threading.Lock()
 
 # L'IA n'est appelee automatiquement que pour les signaux techniques forts.
 AI_VALIDATION_MIN_SCORE = 4
@@ -2473,6 +2478,7 @@ def analyze_news_with_ollama(
     content: str = "",
     context: dict = None,
     quick: bool = False,
+    lock_wait: float = 2.0,
 ) -> dict:
     """Analyse Ollama avec deux profils:
     - quick=True : validation d'un trade, reponse courte et peu couteuse
@@ -2538,8 +2544,8 @@ Reponds UNIQUEMENT en JSON avec ce format exact:
         timeout = runtime_cfg("ai_full_timeout", AI_FULL_TIMEOUT)
 
     # Evite plusieurs generations simultanees qui satureraient le VPS.
-    if not OLLAMA_GENERATION_LOCK.acquire(timeout=2):
-        return {"error": "IA Ollama deja occupee par une autre analyse."}
+    if not OLLAMA_GENERATION_LOCK.acquire(timeout=lock_wait):
+        return {"error": "IA Ollama deja occupee par une autre analyse.", "busy": True}
 
     started = time.monotonic()
     try:
@@ -2747,11 +2753,17 @@ def ai_allows_trade(opportunity: Dict, portfolio: Dict) -> tuple[bool, str]:
             "currency_exposure": portfolio.get("currency_exposure", {}),
         }
 
+        # Priorite au trading : on attend que l'analyse du tableau de bord se termine.
         result = analyze_news_with_ollama(
             f"Signal technique {action} sur {opportunity.get('symbol')}",
             context=context,
             quick=True,
+            lock_wait=float(runtime_cfg("ai_full_timeout", AI_FULL_TIMEOUT)) + 15,
         )
+
+        if result.get("busy"):
+            # Pas de cooldown : aucune generation n'a eu lieu, on retentera au cycle suivant.
+            return False, "IA occupee, nouvel essai au prochain cycle"
 
         # Le cooldown commence apres une tentative reelle de validation IA.
         LAST_AUTO_AI_VALIDATION = time.monotonic()
@@ -2841,8 +2853,28 @@ async def api_ai_portfolio():
     return get_ai_portfolio()
 
 @api_router.get("/ai/full-analysis")
-async def api_ai_full_analysis():
-    return ai_enhanced_analysis()
+def api_ai_full_analysis(refresh: bool = False):
+    """Analyse complete Tech + IA, en cache FULL_ANALYSIS_CACHE_TTL secondes.
+
+    Route synchrone (threadpool) : la generation Ollama ne bloque plus l'API.
+    """
+    cached = FULL_ANALYSIS_CACHE.get("data")
+    age = time.monotonic() - FULL_ANALYSIS_CACHE["timestamp"]
+    if cached is not None and age < FULL_ANALYSIS_CACHE_TTL and not refresh:
+        return {**cached, "cached": True, "cache_age_seconds": int(age)}
+    if not FULL_ANALYSIS_LOCK.acquire(blocking=False):
+        if cached is not None:
+            return {**cached, "cached": True, "cache_age_seconds": int(age)}
+        raise HTTPException(status_code=503, detail="Analyse en cours, reessayez dans un instant")
+    try:
+        data = ai_enhanced_analysis()
+        ai = data.get("ai_analysis") or {}
+        if not ai.get("error"):
+            FULL_ANALYSIS_CACHE["data"] = data
+            FULL_ANALYSIS_CACHE["timestamp"] = time.monotonic()
+        return {**data, "cached": False, "cache_age_seconds": 0}
+    finally:
+        FULL_ANALYSIS_LOCK.release()
 
 @api_router.post("/ai/config")
 async def api_ai_config(body: dict):
