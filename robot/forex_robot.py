@@ -2894,7 +2894,8 @@ async def serve_interface():
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "interface.html")
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+            # Pas de cache navigateur : apres un git pull, l'interface a jour s'affiche.
+            return HTMLResponse(content=f.read(), headers={"Cache-Control": "no-store"})
     return HTMLResponse(content="<h1>interface.html non trouve. Placez-le dans le meme dossier que forex_robot.py</h1>")
 
 app.include_router(api_router)
