@@ -976,6 +976,22 @@ def manage_position_protection(position):
     except Exception as e:
         logger.debug("Protection position %s: %s", getattr(position, "ticket", "?"), e)
 
+def position_progress(pos) -> float:
+    """Progression vers l'objectif en % : objectif $ s'il est defini, sinon le TP broker."""
+    target = float(CONFIG.get("target_profit", 0) or 0)
+    if target > 0:
+        return float(pos.profit) / target * 100
+    try:
+        open_price = float(pos.price_open)
+        tp = float(getattr(pos, "tp", 0) or 0)
+        current = float(getattr(pos, "price_current", 0) or 0)
+        if tp > 0 and current > 0 and tp != open_price:
+            return (current - open_price) / (tp - open_price) * 100
+    except (TypeError, ValueError):
+        pass
+    return 0.0
+
+
 def pullback_risk_from_comment(position) -> float:
     """Distance initiale du SL (1R) stockee dans le commentaire « PB|R=0.00213 »."""
     comment = str(getattr(position, "comment", "") or "")
@@ -1967,7 +1983,7 @@ async def api_status():
                 "type": "BUY" if pos.type == 0 else "SELL",
                 "profit": float(pos.profit),
                 "target": CONFIG["target_profit"],
-                "progress": (pos.profit / CONFIG["target_profit"]) * 100
+                "progress": position_progress(pos)
             }
         return {
             "connected": True,
@@ -2038,7 +2054,7 @@ async def api_positions():
             "volume": float(p.volume),
             "profit": float(p.profit),
             "target": CONFIG["target_profit"],
-            "progress": (p.profit / CONFIG["target_profit"]) * 100 if CONFIG["target_profit"] else 0,
+            "progress": position_progress(p),
             "open_price": float(getattr(p, "price_open", 0) or 0),
             "current_price": float(getattr(p, "price_current", 0) or 0),
             "sl": float(getattr(p, "sl", 0) or 0),
