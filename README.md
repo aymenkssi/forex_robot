@@ -82,7 +82,12 @@ de réglages. Aucun ordre n'est envoyé ; Mistral et le calendrier ne sont pas s
 cd /opt/apps/iamrobot
 .venv/bin/python tools/backtest.py                    # 6 derniers mois, 28 paires
 .venv/bin/python tools/backtest.py --months 12 --extra-spread 3
+.venv/bin/python tools/backtest.py --strategy pullback --months 24 --extra-spread 3   # recul H4/H1
+.venv/bin/python tools/backtest.py --strategy trend --months 120 --extra-spread 3     # tendance D1
 ```
+
+Les stratégies `pullback` et `trend` sont évaluées sur une période de mise au point (2/3) puis
+sur une période de validation (1/3) qui ne doit jamais servir à régler les paramètres.
 
 Résultats exprimés en R (1R = risque d'un trade) et en % du capital avec le risque configuré.
 Détail dans `backtest_results/` (non versionné).
