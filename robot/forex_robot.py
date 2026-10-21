@@ -20,6 +20,7 @@ import os
 # Le robot Linux ne doit PAS appeler mt5.initialize(), mt5.login() ou
 # mt5.shutdown() : ces appels concernent le MT5 distant du bridge.
 from mt5linux import MetaTrader5
+import strategy_pullback as sp
 
 MT5_BRIDGE_HOST = os.environ.get("MT5_BRIDGE_HOST", "127.0.0.1")
 MT5_BRIDGE_PORT = int(os.environ.get("MT5_BRIDGE_PORT", "18812"))
@@ -86,6 +87,10 @@ REVERSAL_MIN_SCORE = 4
 REVERSAL_MIN_HOLD_MINUTES = 30
 BLOCK_ROLLOVER = True
 ROBOT_MAGIC = 202401
+# Strategie « recul dans la tendance » : paires majeures (spreads faibles).
+PULLBACK_SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
+                    "EURJPY", "GBPJPY", "EURGBP"]
+PULLBACK_COMMENT = "PB|R="
 
 # ============ CONFIGURATION ============
 CONFIG = {
@@ -145,6 +150,11 @@ CONFIG = {
     "max_spread_sl_pct": 15.0,
     # Unite de temps de l'ATR pour SL/TP/trailing (M15, H1 ou H4).
     "atr_timeframe": "M15",
+    # Strategie d'entree : "score" (historique) ou "pullback" (recul dans la tendance H4/H1).
+    "strategy": "score",
+    "pullback_tp_r": 2.0,
+    # Pullback : entrees seulement 09h-19h (heure serveur, sessions Londres/New York).
+    "pullback_session": True,
     "max_drawdown_new_trades_pct": 5.0,
     "auto_stop_drawdown_pct": 8.0,
     "m15_min_bars": 60,
@@ -198,6 +208,7 @@ PERSISTENT_CONFIG_KEYS = {
     "news_after_minutes", "risk_per_trade_pct", "daily_loss_limit_pct",
     "close_on_reversal", "reversal_min_score", "reversal_min_hold_minutes",
     "block_rollover", "recommended_version", "atr_timeframe",
+    "strategy", "pullback_tp_r", "pullback_session",
     "telegram_bot_token", "telegram_chat_id", "telegram_enabled",
     "telegram_on_open", "telegram_on_close", "telegram_on_target",
     "telegram_on_stoploss", "telegram_on_analysis",
@@ -329,12 +340,12 @@ def _apply_config_values(saved: dict) -> None:
             "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
             "trailing_trigger_r", "trailing_atr_multiplier",
             "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
-            "risk_per_trade_pct", "daily_loss_limit_pct", "max_spread_sl_pct"
+            "risk_per_trade_pct", "daily_loss_limit_pct", "max_spread_sl_pct", "pullback_tp_r"
         }:
             CONFIG[key] = float(value)
         elif key in {
             "use_ai_analysis", "telegram_enabled",
-            "broker_sl_required", "close_on_reversal", "block_rollover",
+            "broker_sl_required", "close_on_reversal", "block_rollover", "pullback_session",
             "telegram_on_open", "telegram_on_close",
             "telegram_on_target", "telegram_on_stoploss",
             "telegram_on_analysis"
@@ -933,13 +944,18 @@ def manage_position_protection(position):
         # courant : apres le break-even il vaut le prix d'entree (R = 0) et le
         # trailing ne se declenchait plus jamais.
         initial_r = atr * runtime_cfg("atr_sl_multiplier", ATR_SL_MULTIPLIER)
+        pullback_r = pullback_risk_from_comment(position)
+        if pullback_r:
+            # Strategie pullback : R reel enregistre a l'ouverture, break-even seul
+            # (pas de trailing), comme dans le backtest valide.
+            initial_r = pullback_r
         if initial_r <= 0:
             return
         favorable = (current - entry) if action == "BUY" else (entry - current)
         r_multiple = favorable / initial_r
 
         new_sl = None
-        if r_multiple >= runtime_cfg("trailing_trigger_r", TRAILING_TRIGGER_R):
+        if not pullback_r and r_multiple >= runtime_cfg("trailing_trigger_r", TRAILING_TRIGGER_R):
             candidate = current - atr * runtime_cfg("trailing_atr_multiplier", TRAILING_ATR_MULTIPLIER) if action == "BUY" else current + atr * runtime_cfg("trailing_atr_multiplier", TRAILING_ATR_MULTIPLIER)
             if action == "BUY" and (current_sl <= 0 or candidate > current_sl) and candidate < current:
                 new_sl = candidate
@@ -959,6 +975,108 @@ def manage_position_protection(position):
                 logger.info("PROTECTION %s ticket=%s | R=%.2f | SL=%s", symbol, position.ticket, r_multiple, new_sl)
     except Exception as e:
         logger.debug("Protection position %s: %s", getattr(position, "ticket", "?"), e)
+
+def pullback_risk_from_comment(position) -> float:
+    """Distance initiale du SL (1R) stockee dans le commentaire « PB|R=0.00213 »."""
+    comment = str(getattr(position, "comment", "") or "")
+    if not comment.startswith(PULLBACK_COMMENT):
+        return 0.0
+    try:
+        return float(comment[len(PULLBACK_COMMENT):])
+    except ValueError:
+        return 0.0
+
+
+def rates_to_columns(raw) -> Optional[dict]:
+    """Bougies MT5 (proxy RPyC ou tableau local) -> colonnes numpy locales."""
+    if raw is None or len(raw) == 0:
+        return None
+    try:
+        from rpyc.core.netref import BaseNetref
+        from rpyc.utils.classic import obtain
+        if isinstance(raw, BaseNetref):
+            names, rows = list(obtain(raw.dtype.names)), obtain(raw.tolist())
+        else:
+            names, rows = list(raw.dtype.names), raw.tolist()
+    except ImportError:
+        names, rows = list(raw.dtype.names), raw.tolist()
+    cols = dict(zip(names, (np.asarray(c, dtype=float) for c in zip(*rows))))
+    return {k: cols[k] for k in ("time", "open", "high", "low", "close")}
+
+
+def pullback_live_signal(symbol: str) -> Optional[Dict]:
+    """Signal pullback sur les dernieres bougies H1/H4 CLOTUREES (start_pos=1)."""
+    h4 = rates_to_columns(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H4, 1, 300))
+    h1 = rates_to_columns(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 1, 120))
+    if h4 is None or h1 is None or len(h4["close"]) < 210 or len(h1["close"]) < 60:
+        return None
+    ind = sp.compute_indicators(h4, h1)
+    return sp.pullback_signal(h4, h1, ind, len(h1["close"]) - 1, len(h4["close"]) - 1)
+
+
+def pullback_cycle(account, portfolio: Dict, positions: list, events: list) -> None:
+    """Entrees de la strategie pullback, evaluees pendant les 15 min qui suivent la cloture H1."""
+    now = server_time_now()
+    if now is None:
+        return
+    if now.minute >= 15:
+        print("  Pullback : prochaine evaluation a la cloture H1")
+        return
+    if runtime_cfg("pullback_session", True) and not (9 <= now.hour <= 19):
+        print(f"  Pullback : hors session ({now:%H:%M} serveur)")
+        return
+
+    hard_max = min(int(CONFIG.get("max_positions", 1)), runtime_cfg("hard_max_positions", HARD_MAX_POSITIONS))
+    open_symbols = {str(p.symbol) for p in positions}
+    for symbol in PULLBACK_SYMBOLS:
+        if symbol in open_symbols:
+            continue
+        sig = pullback_live_signal(symbol)
+        if not sig:
+            continue
+        action = "BUY" if sig["dir"] > 0 else "SELL"
+        checks = [daily_loss_allows(account), trading_session_allows(),
+                  economic_news_allows_trade(events, symbol), trade_cooldown_allows(symbol),
+                  currency_exposure_allows(symbol, action, portfolio.get("currency_exposure", {}))]
+        if int(portfolio.get("open_positions", 0)) >= hard_max:
+            checks.append((False, f"Limite positions {hard_max}"))
+        refused = [reason for ok, reason in checks if not ok]
+        if refused:
+            print(f"  -> {symbol} {action}: RISK REFUS | {refused[0]}")
+            continue
+
+        info = mt5.symbol_info(symbol)
+        tick = mt5.symbol_info_tick(symbol)
+        if info is None or tick is None:
+            continue
+        d = sig["dir"]
+        entry = float(tick.ask if d > 0 else tick.bid)
+        if not sp.stop_distance_ok(entry, sig["stop"], sig["atr"], d):
+            print(f"  -> {symbol} {action}: RISK REFUS | SL hors 0,8-3 ATR")
+            continue
+        dist = (entry - sig["stop"]) * d
+        point = float(getattr(info, "point", 0) or 0)
+        spread = float(tick.ask) - float(tick.bid)
+        spread_pct = spread / dist * 100
+        if point > 0 and spread / point > runtime_cfg("max_spread_points", MAX_SPREAD_POINTS):
+            print(f"  -> {symbol} {action}: RISK REFUS | Spread trop eleve ({spread / point:.0f} pts)")
+            continue
+        if spread_pct > runtime_cfg("max_spread_sl_pct", MAX_SPREAD_SL_PCT):
+            print(f"  -> {symbol} {action}: RISK REFUS | Spread trop cher ({spread_pct:.0f}% du SL)")
+            continue
+
+        digits = int(getattr(info, "digits", 5))
+        tp = entry + d * float(runtime_cfg("pullback_tp_r", 2.0)) * dist
+        ticket = open_trade(
+            symbol, action, f"{PULLBACK_COMMENT}{dist:.{digits}f}",
+            sl_price=round(sig["stop"], digits), tp_price=round(tp, digits),
+        )
+        print(f"  -> {symbol} {action} PULLBACK | SL={sig['stop']:.{digits}f} TP={tp:.{digits}f} "
+              f"| spread {spread_pct:.0f}% du SL | {'OUVERT' if ticket else 'ECHEC'}")
+        if ticket:
+            open_symbols.add(symbol)
+            portfolio = get_ai_portfolio()
+
 
 def analyze_symbol_score(symbol: str) -> Dict:
     prices = get_historical_prices(symbol, 30)
@@ -1588,6 +1706,8 @@ def reversal_requires_close(pos) -> tuple[bool, str]:
         return False, ""
     if int(getattr(pos, "magic", 0) or 0) != ROBOT_MAGIC:
         return False, ""
+    if pullback_risk_from_comment(pos):
+        return False, ""
     now = server_time_now()
     if now is None:
         return False, ""
@@ -1694,6 +1814,11 @@ def auto_trader_loop():
                 active_impacts = [k for k, enabled in CONFIG.get("impacts", {}).items() if enabled]
                 for event in [e for e in events if e.get("impact", "").lower() in active_impacts][:3]:
                     print(f"  [{event['impact'].upper()}] {event['title']} dans {event['minutes_until']} min")
+
+                if str(CONFIG.get("strategy", "score")) == "pullback":
+                    pullback_cycle(account, portfolio, positions, events)
+                    time.sleep(CONFIG["check_interval"])
+                    continue
 
                 opportunities = find_top_opportunities(limit=len(CONFIG["symbols"]))
                 
@@ -2220,6 +2345,9 @@ async def api_get_config():
             "max_spread_points": CONFIG["max_spread_points"],
             "max_spread_sl_pct": CONFIG["max_spread_sl_pct"],
             "atr_timeframe": CONFIG["atr_timeframe"],
+            "strategy": CONFIG["strategy"],
+            "pullback_tp_r": CONFIG["pullback_tp_r"],
+            "pullback_session": CONFIG["pullback_session"],
             "max_drawdown_new_trades_pct": CONFIG["max_drawdown_new_trades_pct"],
             "auto_stop_drawdown_pct": CONFIG["auto_stop_drawdown_pct"],
             "m15_min_bars": CONFIG["m15_min_bars"],
@@ -2275,6 +2403,9 @@ async def api_update_config(body: dict):
         "max_spread_points": "max_spread_points",
         "max_spread_sl_pct": "max_spread_sl_pct",
         "atr_timeframe": "atr_timeframe",
+        "strategy": "strategy",
+        "pullback_tp_r": "pullback_tp_r",
+        "pullback_session": "pullback_session",
         "max_drawdown_new_trades_pct": "max_drawdown_new_trades_pct",
         "auto_stop_drawdown_pct": "auto_stop_drawdown_pct",
         "m15_min_bars": "m15_min_bars",
@@ -2318,9 +2449,10 @@ async def api_update_config(body: dict):
         "atr_sl_multiplier", "atr_tp_multiplier",
         "breakeven_trigger_r", "trailing_trigger_r",
         "trailing_atr_multiplier", "risk_per_trade_pct", "daily_loss_limit_pct",
-        "max_spread_sl_pct",
+        "max_spread_sl_pct", "pullback_tp_r",
     }
-    bool_keys = {"broker_sl_required", "use_ai_analysis", "close_on_reversal", "block_rollover"}
+    bool_keys = {"broker_sl_required", "use_ai_analysis", "close_on_reversal", "block_rollover",
+                 "pullback_session"}
 
     for frontend_key, config_key in direct_keys.items():
         if frontend_key not in body:
@@ -2335,6 +2467,10 @@ async def api_update_config(body: dict):
                 value = bool(value)
             elif config_key == "ai_keep_alive":
                 value = str(value).strip()
+            elif config_key == "strategy":
+                value = str(value).strip().lower()
+                if value not in {"score", "pullback"}:
+                    raise ValueError(value)
             elif config_key == "atr_timeframe":
                 value = str(value).strip().upper()
                 if value not in {"M15", "H1", "H4"}:
@@ -2356,6 +2492,7 @@ async def api_update_config(body: dict):
     CONFIG["trade_cooldown_minutes"] = max(0, min(int(CONFIG["trade_cooldown_minutes"]), 1440))
     CONFIG["max_spread_points"] = max(0, min(int(CONFIG["max_spread_points"]), 1000))
     CONFIG["max_spread_sl_pct"] = max(0.0, min(float(CONFIG["max_spread_sl_pct"]), 100.0))
+    CONFIG["pullback_tp_r"] = max(0.5, min(float(CONFIG["pullback_tp_r"]), 10.0))
     CONFIG["max_drawdown_new_trades_pct"] = max(0.0, min(float(CONFIG["max_drawdown_new_trades_pct"]), 100.0))
     CONFIG["auto_stop_drawdown_pct"] = max(CONFIG["max_drawdown_new_trades_pct"], min(float(CONFIG["auto_stop_drawdown_pct"]), 100.0))
     CONFIG["m15_min_bars"] = max(50, min(int(CONFIG["m15_min_bars"]), 500))
@@ -2422,7 +2559,8 @@ async def api_update_config(body: dict):
                 "ai_quick_num_predict", "ai_quick_timeout", "ai_full_num_predict",
                 "ai_full_timeout", "ai_keep_alive", "hard_max_positions",
                 "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
-                "max_spread_sl_pct", "atr_timeframe", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+                "max_spread_sl_pct", "atr_timeframe", "strategy", "pullback_tp_r",
+                "pullback_session", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
                 "m15_min_bars", "m5_min_bars", "atr_period",
                 "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
                 "trailing_trigger_r", "trailing_atr_multiplier", "broker_sl_required",
@@ -2460,6 +2598,7 @@ async def api_risk_status():
         "max_spread_points": int(runtime_cfg("max_spread_points", MAX_SPREAD_POINTS)),
         "max_spread_sl_pct": float(runtime_cfg("max_spread_sl_pct", MAX_SPREAD_SL_PCT)),
         "atr_timeframe": str(runtime_cfg("atr_timeframe", ATR_TIMEFRAME)),
+        "strategy": str(runtime_cfg("strategy", "score")),
         "trade_cooldown_minutes": int(runtime_cfg("trade_cooldown_minutes", TRADE_COOLDOWN_MINUTES)),
         "max_drawdown_new_trades_pct": float(runtime_cfg("max_drawdown_new_trades_pct", MAX_DRAWDOWN_FOR_NEW_TRADES_PCT)),
         "auto_stop_drawdown_pct": float(runtime_cfg("auto_stop_drawdown_pct", AUTO_STOP_DRAWDOWN_PCT)),
