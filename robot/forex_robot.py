@@ -186,7 +186,7 @@ PERSISTENT_CONFIG_KEYS = {
     "trailing_atr_multiplier", "broker_sl_required", "news_blackout_minutes",
     "news_after_minutes", "risk_per_trade_pct", "daily_loss_limit_pct",
     "close_on_reversal", "reversal_min_score", "reversal_min_hold_minutes",
-    "block_rollover",
+    "block_rollover", "recommended_version",
     "telegram_bot_token", "telegram_chat_id", "telegram_enabled",
     "telegram_on_open", "telegram_on_close", "telegram_on_target",
     "telegram_on_stoploss", "telegram_on_analysis",
@@ -213,73 +213,131 @@ def save_persistent_config() -> bool:
         logger.exception("Erreur sauvegarde configuration: %s", e)
         return False
 
+RECOMMENDED_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.recommended.json")
+# Reglages propres a l'installation, jamais ecrases par la configuration recommandee.
+RECOMMENDED_EXCLUDED_KEYS = {
+    "telegram_bot_token", "telegram_chat_id", "telegram_enabled",
+    "telegram_on_open", "telegram_on_close", "telegram_on_target",
+    "telegram_on_stoploss", "telegram_on_analysis",
+    "ollama_url", "ollama_model", "recommended_version",
+}
+
+
 def load_persistent_config() -> bool:
+    loaded = False
     if not os.path.exists(CONFIG_FILE):
         logger.info("Aucun config.json: utilisation des valeurs par defaut")
-        return False
-
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            saved = json_module.load(f)
-        if not isinstance(saved, dict):
-            logger.warning("config.json invalide: objet JSON attendu")
-            return False
-
-        for key in PERSISTENT_CONFIG_KEYS:
-            if key not in saved:
-                continue
-            value = saved[key]
-
-            if key == "impacts" and isinstance(value, dict):
-                merged = CONFIG.get("impacts", {}).copy()
-                merged.update(value)
-                CONFIG[key] = merged
-            elif key in {"lot_size", "target_profit", "stop_loss"}:
-                CONFIG[key] = float(value)
-            elif key in {
-                "max_positions", "min_score", "check_interval",
-                "rsi_period", "rsi_overbought", "rsi_oversold",
-                "sma_fast", "sma_slow", "ai_validation_min_score",
-                "ai_auto_cooldown", "ai_quick_num_predict", "ai_quick_timeout",
-                "ai_full_num_predict", "ai_full_timeout", "hard_max_positions",
-                "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
-                "m15_min_bars", "m5_min_bars", "atr_period",
-                "news_after_minutes", "reversal_min_score", "reversal_min_hold_minutes"
-            }:
-                CONFIG[key] = int(value)
-                if key == "hard_max_positions":
-                    CONFIG[key] = max(1, min(CONFIG[key], 20))
-                elif key == "max_positions":
-                    CONFIG[key] = max(1, min(CONFIG[key], int(CONFIG.get("hard_max_positions", HARD_MAX_POSITIONS))))
-            elif key in {
-                "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
-                "trailing_trigger_r", "trailing_atr_multiplier",
-                "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
-                "risk_per_trade_pct", "daily_loss_limit_pct"
-            }:
-                CONFIG[key] = float(value)
-            elif key in {
-                "use_ai_analysis", "telegram_enabled",
-                "broker_sl_required", "close_on_reversal", "block_rollover",
-                "telegram_on_open", "telegram_on_close",
-                "telegram_on_target", "telegram_on_stoploss",
-                "telegram_on_analysis"
-            }:
-                CONFIG[key] = bool(value)
+    else:
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved = json_module.load(f)
+            if not isinstance(saved, dict):
+                logger.warning("config.json invalide: objet JSON attendu")
             else:
-                CONFIG[key] = value
+                _apply_config_values(saved)
+                logger.info("Configuration chargee depuis %s", CONFIG_FILE)
+                loaded = True
+        except Exception as e:
+            logger.exception("Erreur chargement configuration: %s", e)
 
-        # Normalisation finale apres chargement.
-        CONFIG["hard_max_positions"] = max(1, min(int(CONFIG.get("hard_max_positions", HARD_MAX_POSITIONS)), 20))
-        CONFIG["max_positions"] = max(1, min(int(CONFIG.get("max_positions", 1)), CONFIG["hard_max_positions"]))
-        # Le SL broker n'est plus desactivable : sans SL, une seule position peut
-        # effacer des dizaines de gains (cause des pertes constatees en demo).
-        CONFIG["broker_sl_required"] = True
-        logger.info("Configuration chargee depuis %s", CONFIG_FILE)
-        return True
+    apply_recommended_config(force=False)
+    return loaded
+
+
+def load_recommended_config() -> Optional[dict]:
+    if not os.path.exists(RECOMMENDED_CONFIG_FILE):
+        return None
+    try:
+        with open(RECOMMENDED_CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json_module.load(f)
+        if not isinstance(data, dict) or not isinstance(data.get("values"), dict):
+            raise ValueError("objet {version, values} attendu")
+        return data
     except Exception as e:
-        logger.exception("Erreur chargement configuration: %s", e)
-        return False
+        logger.exception("config.recommended.json invalide: %s", e)
+        return None
+
+
+def apply_recommended_config(force: bool = False) -> dict:
+    """Applique config.recommended.json si sa version est plus recente (ou si force).
+
+    Les reglages modifies ensuite depuis l'interface restent en place jusqu'a
+    la prochaine version du fichier recommande.
+    """
+    data = load_recommended_config()
+    if data is None:
+        return {"applied": False, "reason": "config.recommended.json absent ou invalide"}
+    version = int(data.get("version", 0))
+    current = int(CONFIG.get("recommended_version", 0) or 0)
+    if not force and current >= version:
+        return {"applied": False, "version": version, "reason": "deja appliquee"}
+
+    values = {
+        k: v for k, v in data["values"].items()
+        if k in PERSISTENT_CONFIG_KEYS and k not in RECOMMENDED_EXCLUDED_KEYS
+    }
+    _apply_config_values(values)
+    CONFIG["recommended_version"] = version
+    saved = save_persistent_config()
+    logger.info(
+        "CONFIG RECOMMANDEE v%s APPLIQUEE (%s parametres, persistent=%s)",
+        version, len(values), saved,
+    )
+    return {"applied": True, "version": version, "updated_fields": sorted(values), "persistent": saved}
+
+
+def _apply_config_values(saved: dict) -> None:
+    """Copie des valeurs (config.json ou recommandee) dans CONFIG avec typage et bornes."""
+    for key in PERSISTENT_CONFIG_KEYS:
+        if key not in saved:
+            continue
+        value = saved[key]
+
+        if key == "impacts" and isinstance(value, dict):
+            merged = CONFIG.get("impacts", {}).copy()
+            merged.update(value)
+            CONFIG[key] = merged
+        elif key in {"lot_size", "target_profit", "stop_loss"}:
+            CONFIG[key] = float(value)
+        elif key in {
+            "max_positions", "min_score", "check_interval",
+            "rsi_period", "rsi_overbought", "rsi_oversold",
+            "sma_fast", "sma_slow", "ai_validation_min_score",
+            "ai_auto_cooldown", "ai_quick_num_predict", "ai_quick_timeout",
+            "ai_full_num_predict", "ai_full_timeout", "hard_max_positions",
+            "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
+            "m15_min_bars", "m5_min_bars", "atr_period",
+            "news_after_minutes", "reversal_min_score", "reversal_min_hold_minutes"
+        }:
+            CONFIG[key] = int(value)
+            if key == "hard_max_positions":
+                CONFIG[key] = max(1, min(CONFIG[key], 20))
+            elif key == "max_positions":
+                CONFIG[key] = max(1, min(CONFIG[key], int(CONFIG.get("hard_max_positions", HARD_MAX_POSITIONS))))
+        elif key in {
+            "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
+            "trailing_trigger_r", "trailing_atr_multiplier",
+            "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+            "risk_per_trade_pct", "daily_loss_limit_pct"
+        }:
+            CONFIG[key] = float(value)
+        elif key in {
+            "use_ai_analysis", "telegram_enabled",
+            "broker_sl_required", "close_on_reversal", "block_rollover",
+            "telegram_on_open", "telegram_on_close",
+            "telegram_on_target", "telegram_on_stoploss",
+            "telegram_on_analysis"
+        }:
+            CONFIG[key] = bool(value)
+        else:
+            CONFIG[key] = value
+
+    # Normalisation finale apres chargement.
+    CONFIG["hard_max_positions"] = max(1, min(int(CONFIG.get("hard_max_positions", HARD_MAX_POSITIONS)), 20))
+    CONFIG["max_positions"] = max(1, min(int(CONFIG.get("max_positions", 1)), CONFIG["hard_max_positions"]))
+    # Le SL broker n'est plus desactivable : sans SL, une seule position peut
+    # effacer des dizaines de gains (cause des pertes constatees en demo).
+    CONFIG["broker_sl_required"] = True
 
 load_persistent_config()
 
@@ -2146,6 +2204,14 @@ async def api_get_config():
             "block_rollover": CONFIG["block_rollover"],
         }
     }
+
+@api_router.post("/config/recommended")
+async def api_apply_recommended_config():
+    """Reapplique la configuration recommandee (bouton de l'interface)."""
+    result = apply_recommended_config(force=True)
+    if not result.get("applied"):
+        raise HTTPException(status_code=500, detail=result.get("reason", "Echec"))
+    return {"success": True, **result}
 
 @api_router.post("/config")
 async def api_update_config(body: dict):

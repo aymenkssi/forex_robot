@@ -557,6 +557,7 @@
                 <div class="mt-8 flex flex-col md:flex-row gap-3">
                     <button onclick="saveConfig()" data-admin-only="true" class="btn btn-blue"><i class="fas fa-save mr-2"></i>Sauvegarder Configuration</button>
                     <button onclick="loadConfigFromServer(true)" data-admin-only="true" class="btn btn-gray"><i class="fas fa-cloud-arrow-down mr-2"></i>Recharger depuis le serveur</button>
+                    <button onclick="applyRecommendedConfig()" data-admin-only="true" class="btn btn-gray"><i class="fas fa-wand-magic-sparkles mr-2"></i>Appliquer la config recommandée</button>
                     <button onclick="resetConfig()" data-admin-only="true" class="btn btn-gray"><i class="fas fa-undo mr-2"></i>Restaurer configuration serveur</button>
                 </div>
             </div>
@@ -1722,6 +1723,21 @@
 
             const card = document.getElementById('tab-settings')?.querySelector('.card');
             if (card) card.classList.add('config-dirty');
+        }
+
+        async function applyRecommendedConfig() {
+            if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return; }
+            if (!confirm('Remplacer les réglages de trading par la configuration recommandée ? (Telegram et Ollama ne sont pas modifiés)')) return;
+            try {
+                const response = await fetch(API_URL + '/config/recommended', { method: 'POST' });
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 401) throw new Error('Session expirée.');
+                if (!response.ok || !data.success) throw new Error(data.detail || ('HTTP ' + response.status));
+                await loadConfigFromServer(false);
+                showToast('Configuration recommandée v' + data.version + ' appliquée (' + (data.updated_fields?.length || 0) + ' paramètres)', 'success');
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
         }
 
         async function saveConfig() {
