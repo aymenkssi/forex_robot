@@ -2714,4 +2714,6 @@ if __name__ == "__main__":
         print("  2. Le serveur mt5linux/RPyC est lance")
         print(f"  3. Le bridge ecoute sur {MT5_BRIDGE_HOST}:{MT5_BRIDGE_PORT}")
         print("  4. Le terminal MT5 est connecte au compte souhaite")
+        # Code non nul : systemd (Restart=on-failure/always) relance le robot.
+        raise SystemExit(1)
 

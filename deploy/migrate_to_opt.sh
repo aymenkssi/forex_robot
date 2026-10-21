@@ -10,9 +10,12 @@
 #   2. clone le depot dans /opt/apps/iamrobot.new-<date>
 #   3. y copie les secrets (config.json, users.json, mt5server.exe) et garde les
 #      docker-compose.yml / nginx/default.conf actuellement en production
-#   4. arrete robot + bridge, bascule les dossiers, recree le venv
+#   4. arrete le robot, bascule les dossiers, recree le venv
 #   5. met a jour les chemins dans les services systemd, redemarre et verifie
-# En cas d'erreur apres l'arret des services, l'ancien etat est restaure.
+# Le bridge MT5 n'est PAS redemarre : seul le chemin de son service est mis a
+# jour (pris en compte au prochain redemarrage). La connexion MT5 est testee
+# avant toute modification et avant de relancer le robot.
+# En cas d'erreur apres l'arret du robot, l'ancien etat est restaure.
 # /root/forex-robot n'est jamais modifie ni supprime.
 
 set -Eeuo pipefail
@@ -38,12 +41,43 @@ die()  { printf '\033[1;31m[X] %s\033[0m\n' "$*" >&2; exit 1; }
 
 usr_systemctl() { XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user "$@"; }
 
-wait_port() {
-    local port="$1" timeout="$2" i
-    for ((i = 0; i < timeout; i++)); do
-        ss -lnt | grep -q ":${port}\b" && return 0
+# Teste MT5 a travers le bridge avec le python d'un venv : $1=python, $2=essais.
+# N'appelle jamais shutdown() (cela couperait l'IPC MT5 partagee avec le robot).
+mt5_check() {
+    local py="$1" tries="${2:-1}" i
+    for ((i = 1; i <= tries; i++)); do
+        if timeout 90 "$py" - <<'PY'
+import sys
+from mt5linux import MetaTrader5
+mt5 = MetaTrader5(host="127.0.0.1", port=18812, timeout=60)
+ok = mt5.initialize()
+account = mt5.account_info() if ok else None
+print("  initialize =", ok, "| version =", mt5.version() if ok else None,
+      "| last_error =", mt5.last_error(),
+      "| compte =", getattr(account, "login", None))
+sys.exit(0 if account is not None else 1)
+PY
+        then
+            return 0
+        fi
+        [[ $i -lt $tries ]] && { warn "MT5 injoignable (essai $i/$tries), nouvel essai dans 10 s..."; sleep 10; }
+    done
+    return 1
+}
+
+# Attend que le robot ecoute sur 8001 ; echoue tout de suite si le service s'arrete.
+wait_robot() {
+    local i state
+    for ((i = 0; i < 120; i++)); do
+        ss -lnt | grep -q ":8001\b" && return 0
+        state="$(systemctl show -p ActiveState --value forex-robot)"
+        if [[ $i -ge 5 && ( "$state" == "inactive" || "$state" == "failed" ) ]]; then
+            journalctl -u forex-robot -n 40 --no-pager || true
+            return 1
+        fi
         sleep 1
     done
+    journalctl -u forex-robot -n 40 --no-pager || true
     return 1
 }
 
@@ -57,7 +91,6 @@ rollback() {
     }
     warn "ERREUR pendant l'etape '${STAGE}' : restauration de l'etat precedent..."
     systemctl stop forex-robot || true
-    [[ $BRIDGE_UNIT -eq 1 ]] && { usr_systemctl stop mt5-bridge || true; }
     [[ -f "$BACKUP/forex-robot.service" ]] && cp -a "$BACKUP/forex-robot.service" "$SYS_UNIT"
     [[ -f "$BACKUP/mt5-bridge.service" ]] && cp -a "$BACKUP/mt5-bridge.service" "$USER_UNIT"
     systemctl daemon-reload || true
@@ -66,11 +99,14 @@ rollback() {
         [[ -d "$TARGET" ]] && mv "$TARGET" "${TARGET}.failed-${TS}"
         mv "$PREV_DIR" "$TARGET"
     fi
-    [[ $BRIDGE_UNIT -eq 1 ]] && { usr_systemctl start mt5-bridge || true; }
-    wait_port 18812 60 || warn "Bridge non revenu sur 18812 : verifier MT5 dans la session RDP."
     systemctl start forex-robot || true
     (cd "$TARGET" && docker compose up -d --force-recreate) || true
-    warn "Restauration terminee. Sauvegarde : $BACKUP"
+    if wait_robot; then
+        warn "Restauration terminee, robot actif depuis $OLD_DIR. Sauvegarde : $BACKUP"
+    else
+        warn "Restauration terminee MAIS le robot ne repond pas sur 8001."
+        warn "Verifier MT5/bridge puis : systemctl restart forex-robot"
+    fi
     exit "$rc"
 }
 trap rollback ERR
@@ -92,9 +128,12 @@ python3 -m venv --help >/dev/null 2>&1 || die "python3-venv manquant (apt instal
 if [[ -f "$USER_UNIT" ]] && usr_systemctl cat mt5-bridge >/dev/null 2>&1; then
     BRIDGE_UNIT=1
 else
-    warn "Service utilisateur mt5-bridge non joignable : le bridge ne sera ni arrete ni modifie."
-    warn "Si le bridge tourne depuis $OLD_DIR/server, il continuera a utiliser l'ancien dossier."
+    warn "Service utilisateur mt5-bridge non joignable : son fichier ne sera pas modifie."
 fi
+command -v timeout >/dev/null || die "Commande manquante : timeout"
+log "Test de la connexion MT5 via le bridge (venv actuel)"
+mt5_check "$OLD_DIR/.venv/bin/python" 1 \
+    || die "MT5 injoignable via le bridge AVANT migration : corriger MT5/bridge d'abord (rien n'a ete modifie)."
 
 cat <<EOF
 
@@ -103,7 +142,7 @@ cat <<EOF
   Depot       : $REPO_URL ($BRANCH)
   Sauvegarde  : $BACKUP
 
-  Le robot et le bridge seront arretes ~1 minute. Desactivez l'auto-trading
+  Le robot sera arrete ~1 minute (le bridge MT5 n'est pas touche). Desactivez l'auto-trading
   avant de continuer (les positions ouvertes restent chez le broker).
 EOF
 if [[ "${1:-}" != "--yes" ]]; then
@@ -161,9 +200,8 @@ fi
 
 # ------------------------------------------------------------------ 4. Bascule
 STAGE="stop"
-log "Arret du robot et du bridge"
+log "Arret du robot"
 systemctl stop forex-robot
-[[ $BRIDGE_UNIT -eq 1 ]] && usr_systemctl stop mt5-bridge
 
 STAGE="switch"
 log "Bascule : $TARGET -> $PREV_DIR, $NEW_DIR -> $TARGET"
@@ -200,15 +238,12 @@ fi
 
 # --------------------------------------------------------------- 5. Redemarrage
 STAGE="start"
-if [[ $BRIDGE_UNIT -eq 1 ]]; then
-    log "Demarrage du bridge"
-    usr_systemctl start mt5-bridge
-    wait_port 18812 60 || { echo "Bridge absent de 18812 apres 60 s" >&2; false; }
-fi
+log "Test de la connexion MT5 via le bridge (nouveau venv)"
+mt5_check "$TARGET/.venv/bin/python" 6
 
 log "Demarrage du robot"
 systemctl start forex-robot
-wait_port 8001 120 || { echo "Robot absent de 8001 apres 120 s" >&2; journalctl -u forex-robot -n 40 --no-pager; false; }
+wait_robot
 curl -fsS http://127.0.0.1:8001/api/auth/status >/dev/null
 
 log "Recreation du conteneur iamrobot-proxy depuis $TARGET"
