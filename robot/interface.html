@@ -470,6 +470,7 @@
                     <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-line text-green-400"></i>Trading</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div><label class="block text-gray-400 text-sm mb-2">Stratégie automatique</label><select id="setting-strategy" class="input-dark mono"><option value="pullback">Recul dans la tendance (H4/H1)</option><option value="score">Score technique (historique)</option></select><p class="text-gray-600 text-xs mt-1">Backtest : aucune n'est gagnante ; le recul est la moins perdante</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">TP fixe (pips)</label><input type="number" id="setting-tp-pips" step="1" min="0" max="2000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = TP de la stratégie (2R) ; sinon TP à X pips de l'entrée</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Lot maximum par trade</label><input type="number" id="setting-lot" step="0.01" min="0.01" max="10" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond : le lot réel est calculé selon le risque par trade</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Objectif Profit ($)</label><input type="number" id="setting-target" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (recommandé : TP/trailing ATR). Ignoré s'il est inférieur au risque par trade</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Stop Loss monétaire ($)</label><input type="number" id="setting-sl" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (le SL broker ATR reste indépendant)</p></div>
@@ -520,7 +521,7 @@
                         <div><label class="block text-gray-400 text-sm mb-2">Durée min avant inversion (min)</label><input type="number" id="setting-reversal-hold" min="0" max="1440" step="5" class="input-dark mono"></div>
                         <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">Fermer sur inversion</div><div class="text-xs text-gray-500">Sortie si le signal s'inverse fortement</div></div><input type="checkbox" id="setting-close-reversal" class="w-5 h-5 rounded"></div>
                         <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">Pause rollover / vendredi soir</div><div class="text-xs text-gray-500">Pas d'entrée 23h-01h et vendredi après 21h (heure serveur)</div></div><input type="checkbox" id="setting-block-rollover" class="w-5 h-5 rounded"></div>
-                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">SL broker obligatoire</div><div class="text-xs text-gray-500">Toujours actif : aucune ouverture sans SL MT5</div></div><input type="checkbox" id="setting-broker-sl" class="w-5 h-5 rounded" checked disabled></div>
+                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">SL broker obligatoire</div><div class="text-xs text-yellow-500">Décoché : positions SANS stop loss, lot fixe = « Lot maximum » ; seuls la perte journalière et l'arrêt d'urgence limitent les pertes</div></div><input type="checkbox" id="setting-broker-sl" class="w-5 h-5 rounded"></div>
                     </div>
                 </div>
 
@@ -716,7 +717,15 @@
                         </div>
                         <div>
                             <label class="block text-gray-400 text-sm mb-2">Volume (Lots)</label>
-                            <input type="number" id="manual-volume" step="0.01" min="0.01" value="0.1" class="input-dark mono">
+                            <input type="number" id="manual-volume" step="0.01" min="0.01" value="0.01" class="input-dark mono">
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Take profit (prix, facultatif)</label>
+                            <input type="number" id="manual-tp" step="0.00001" min="0" placeholder="vide = TP automatique" class="input-dark mono">
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">Stop loss (prix, facultatif)</label>
+                            <input type="number" id="manual-sl" step="0.00001" min="0" placeholder="vide = selon « SL broker obligatoire »" class="input-dark mono">
                         </div>
                     </div>
                     <div class="flex flex-col justify-end gap-4">
@@ -1212,6 +1221,7 @@
                 setField('setting-dd-stop', cfg.auto_stop_drawdown_pct);
                 setField('setting-news-blackout', cfg.news_blackout_minutes);
                 setCheck('setting-broker-sl', cfg.broker_sl_required);
+                setField('setting-tp-pips', cfg.manual_tp_pips ?? 0);
                 setField('setting-news-after', cfg.news_after_minutes);
                 setField('setting-risk-pct', cfg.risk_per_trade_pct);
                 setField('setting-daily-loss', cfg.daily_loss_limit_pct);
@@ -1688,7 +1698,8 @@
                 max_drawdown_new_trades_pct: parseFloat(document.getElementById('setting-dd-new').value),
                 auto_stop_drawdown_pct: parseFloat(document.getElementById('setting-dd-stop').value),
                 news_blackout_minutes: parseInt(document.getElementById('setting-news-blackout').value),
-                broker_sl_required: true,
+                broker_sl_required: document.getElementById('setting-broker-sl').checked,
+                manual_tp_pips: parseFloat(document.getElementById('setting-tp-pips').value),
                 news_after_minutes: parseInt(document.getElementById('setting-news-after').value),
                 risk_per_trade_pct: parseFloat(document.getElementById('setting-risk-pct').value),
                 daily_loss_limit_pct: parseFloat(document.getElementById('setting-daily-loss').value),
@@ -1759,7 +1770,7 @@
             if (!currentUser || currentUser.role !== 'admin') { showToast('Accès administrateur requis', 'error'); return false; }
             try {
                 collectConfig();
-                const requiredIds = ['setting-lot','setting-target','setting-sl','setting-score','setting-interval','setting-maxpos','setting-hard-maxpos','setting-max-exposure','setting-trade-cooldown','setting-max-spread','setting-max-spread-sl','setting-dd-new','setting-dd-stop','setting-news-blackout','setting-news-after','setting-risk-pct','setting-daily-loss','setting-reversal-score','setting-reversal-hold','setting-m15-bars','setting-m5-bars','setting-atr-period','setting-atr-sl','setting-atr-tp','setting-breakeven','setting-trailing-trigger','setting-trailing-atr','setting-ai-score','setting-ai-cooldown','setting-ai-quick-tokens','setting-ai-quick-timeout','setting-ai-full-tokens','setting-ai-full-timeout'];
+                const requiredIds = ['setting-lot','setting-target','setting-sl','setting-score','setting-interval','setting-maxpos','setting-hard-maxpos','setting-max-exposure','setting-trade-cooldown','setting-max-spread','setting-max-spread-sl','setting-dd-new','setting-dd-stop','setting-news-blackout','setting-tp-pips','setting-news-after','setting-risk-pct','setting-daily-loss','setting-reversal-score','setting-reversal-hold','setting-m15-bars','setting-m5-bars','setting-atr-period','setting-atr-sl','setting-atr-tp','setting-breakeven','setting-trailing-trigger','setting-trailing-atr','setting-ai-score','setting-ai-cooldown','setting-ai-quick-tokens','setting-ai-quick-timeout','setting-ai-full-tokens','setting-ai-full-timeout'];
                 for (const id of requiredIds) {
                     const el = document.getElementById(id);
                     if (!el || el.value === '' || Number.isNaN(Number(el.value))) throw new Error('Valeur manquante ou invalide: ' + id);
@@ -1820,12 +1831,17 @@
         async function manualTrade(type) {
             var symbol = document.getElementById('manual-symbol').value;
             var volume = parseFloat(document.getElementById('manual-volume').value);
+            var tp = parseFloat(document.getElementById('manual-tp').value);
+            var sl = parseFloat(document.getElementById('manual-sl').value);
+            var payload = { symbol: symbol, type: type, volume: volume };
+            if (tp > 0) payload.tp = tp;
+            if (sl > 0) payload.sl = sl;
 
             try {
                 var response = await fetch(API_URL + '/trading/open', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: symbol, type: type, volume: volume })
+                    body: JSON.stringify(payload)
                 });
                 var result = await response.json();
 

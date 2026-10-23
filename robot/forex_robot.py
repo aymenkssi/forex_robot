@@ -155,6 +155,8 @@ CONFIG = {
     "pullback_tp_r": 2.0,
     # Pullback : entrees seulement 09h-19h (heure serveur, sessions Londres/New York).
     "pullback_session": True,
+    # TP fixe en pips pour les ouvertures automatiques (0 = TP de la strategie).
+    "manual_tp_pips": 0.0,
     "max_drawdown_new_trades_pct": 5.0,
     "auto_stop_drawdown_pct": 8.0,
     "m15_min_bars": 60,
@@ -208,7 +210,7 @@ PERSISTENT_CONFIG_KEYS = {
     "news_after_minutes", "risk_per_trade_pct", "daily_loss_limit_pct",
     "close_on_reversal", "reversal_min_score", "reversal_min_hold_minutes",
     "block_rollover", "recommended_version", "atr_timeframe",
-    "strategy", "pullback_tp_r", "pullback_session",
+    "strategy", "pullback_tp_r", "pullback_session", "manual_tp_pips",
     "telegram_bot_token", "telegram_chat_id", "telegram_enabled",
     "telegram_on_open", "telegram_on_close", "telegram_on_target",
     "telegram_on_stoploss", "telegram_on_analysis",
@@ -340,7 +342,8 @@ def _apply_config_values(saved: dict) -> None:
             "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
             "trailing_trigger_r", "trailing_atr_multiplier",
             "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
-            "risk_per_trade_pct", "daily_loss_limit_pct", "max_spread_sl_pct", "pullback_tp_r"
+            "risk_per_trade_pct", "daily_loss_limit_pct", "max_spread_sl_pct", "pullback_tp_r",
+            "manual_tp_pips"
         }:
             CONFIG[key] = float(value)
         elif key in {
@@ -357,9 +360,6 @@ def _apply_config_values(saved: dict) -> None:
     # Normalisation finale apres chargement.
     CONFIG["hard_max_positions"] = max(1, min(int(CONFIG.get("hard_max_positions", HARD_MAX_POSITIONS)), 20))
     CONFIG["max_positions"] = max(1, min(int(CONFIG.get("max_positions", 1)), CONFIG["hard_max_positions"]))
-    # Le SL broker n'est plus desactivable : sans SL, une seule position peut
-    # effacer des dizaines de gains (cause des pertes constatees en demo).
-    CONFIG["broker_sl_required"] = True
 
 load_persistent_config()
 
@@ -1446,7 +1446,9 @@ def send_telegram(message: str, silent: bool = False) -> bool:
         logger.warning(f"Telegram erreur: {e}")
         return False
 
-def open_trade(symbol: str, action: str, comment: str = "", requested_volume: float = None, sl_price: Optional[float] = None, tp_price: Optional[float] = None, atr: float = 0.0) -> Optional[int]:
+def open_trade(symbol: str, action: str, comment: str = "", requested_volume: float = None,
+               sl_price: Optional[float] = None, tp_price: Optional[float] = None, atr: float = 0.0,
+               sl_is_manual: bool = False, tp_is_manual: bool = False) -> Optional[int]:
     if not ensure_mt5_connection():
         return None
     try:
@@ -1483,7 +1485,7 @@ def open_trade(symbol: str, action: str, comment: str = "", requested_volume: fl
 
         price = float(tick.ask if action == "BUY" else tick.bid)
 
-        # SL broker TOUJOURS obligatoire, calcule sur l'ATR si absent.
+        sl_required = bool(runtime_cfg("broker_sl_required", BROKER_SL_REQUIRED))
         if atr <= 0:
             atr = get_symbol_atr(symbol)
         calc_sl, calc_tp = calculate_atr_sl_tp(symbol_info, tick, action, 0.0, atr)
@@ -1491,17 +1493,33 @@ def open_trade(symbol: str, action: str, comment: str = "", requested_volume: fl
             sl_price = calc_sl
         if tp_price is None:
             tp_price = calc_tp
-        if sl_price is None or float(sl_price) <= 0:
-            logger.error("OUVERTURE BLOQUEE %s: impossible de calculer un SL broker", symbol)
-            return None
 
-        # Volume : impose par l'appelant (trade manuel) ou calcule selon le risque.
+        # TP fixe en pips configure dans l'interface (sauf TP saisi sur un trade manuel).
+        tp_pips = float(runtime_cfg("manual_tp_pips", 0.0) or 0.0)
+        if tp_pips > 0 and not tp_is_manual:
+            point = float(getattr(symbol_info, "point", 0) or 0)
+            pip = point * 10 if int(getattr(symbol_info, "digits", 5)) in (3, 5) else point
+            direction = 1 if action == "BUY" else -1
+            tp_price = round(price + direction * tp_pips * pip, int(getattr(symbol_info, "digits", 5)))
+
+        if sl_required:
+            if sl_price is None or float(sl_price) <= 0:
+                logger.error("OUVERTURE BLOQUEE %s: impossible de calculer un SL broker", symbol)
+                return None
+        elif not sl_is_manual:
+            # Mode sans SL choisi par l'utilisateur : seuls la perte journaliere et
+            # l'arret d'urgence (drawdown) limitent alors les pertes.
+            sl_price = None
+
+        # Volume : impose (trade manuel), calcule selon le risque (avec SL) ou lot fixe (sans SL).
         if requested_volume is not None:
             volume = normalize_volume(symbol_info, requested_volume)
-        else:
+        elif sl_price is not None:
             volume = calculate_risk_volume(symbol_info, price, float(sl_price), mt5.account_info())
             if volume is None:
                 return None
+        else:
+            volume = normalize_volume(symbol_info, float(CONFIG.get("lot_size", 0.01)))
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -2030,7 +2048,10 @@ async def api_open_trade(trade: TradeRequest):
     positions = list(mt5.positions_get() or [])
     if len(positions) >= min(int(CONFIG.get("max_positions", 1)), runtime_cfg("hard_max_positions", HARD_MAX_POSITIONS)):
         raise HTTPException(status_code=400, detail="Limite positions securisee atteinte")
-    ticket = open_trade(trade.symbol, trade.type, trade.comment, trade.volume)
+    sl = trade.sl if trade.sl and trade.sl > 0 else None
+    tp = trade.tp if trade.tp and trade.tp > 0 else None
+    ticket = open_trade(trade.symbol, trade.type, trade.comment, trade.volume,
+                        sl_price=sl, tp_price=tp, sl_is_manual=sl is not None, tp_is_manual=tp is not None)
     if ticket:
         return {"success": True, "ticket": ticket}
     raise HTTPException(status_code=400, detail="Echec ouverture")
@@ -2364,6 +2385,7 @@ async def api_get_config():
             "strategy": CONFIG["strategy"],
             "pullback_tp_r": CONFIG["pullback_tp_r"],
             "pullback_session": CONFIG["pullback_session"],
+            "manual_tp_pips": CONFIG["manual_tp_pips"],
             "max_drawdown_new_trades_pct": CONFIG["max_drawdown_new_trades_pct"],
             "auto_stop_drawdown_pct": CONFIG["auto_stop_drawdown_pct"],
             "m15_min_bars": CONFIG["m15_min_bars"],
@@ -2422,6 +2444,7 @@ async def api_update_config(body: dict):
         "strategy": "strategy",
         "pullback_tp_r": "pullback_tp_r",
         "pullback_session": "pullback_session",
+        "manual_tp_pips": "manual_tp_pips",
         "max_drawdown_new_trades_pct": "max_drawdown_new_trades_pct",
         "auto_stop_drawdown_pct": "auto_stop_drawdown_pct",
         "m15_min_bars": "m15_min_bars",
@@ -2465,7 +2488,7 @@ async def api_update_config(body: dict):
         "atr_sl_multiplier", "atr_tp_multiplier",
         "breakeven_trigger_r", "trailing_trigger_r",
         "trailing_atr_multiplier", "risk_per_trade_pct", "daily_loss_limit_pct",
-        "max_spread_sl_pct", "pullback_tp_r",
+        "max_spread_sl_pct", "pullback_tp_r", "manual_tp_pips",
     }
     bool_keys = {"broker_sl_required", "use_ai_analysis", "close_on_reversal", "block_rollover",
                  "pullback_session"}
@@ -2531,7 +2554,7 @@ async def api_update_config(body: dict):
     CONFIG["daily_loss_limit_pct"] = max(0.0, min(float(CONFIG["daily_loss_limit_pct"]), 50.0))
     CONFIG["reversal_min_score"] = max(1, min(int(CONFIG["reversal_min_score"]), 10))
     CONFIG["reversal_min_hold_minutes"] = max(0, min(int(CONFIG["reversal_min_hold_minutes"]), 1440))
-    CONFIG["broker_sl_required"] = True
+    CONFIG["manual_tp_pips"] = max(0.0, min(float(CONFIG["manual_tp_pips"]), 2000.0))
     CONFIG["rsi_period"] = max(5, min(int(CONFIG["rsi_period"]), 50))
     CONFIG["rsi_oversold"] = max(5, min(int(CONFIG["rsi_oversold"]), 49))
     CONFIG["rsi_overbought"] = max(CONFIG["rsi_oversold"] + 1, min(int(CONFIG["rsi_overbought"]), 95))
@@ -2576,7 +2599,7 @@ async def api_update_config(body: dict):
                 "ai_full_timeout", "ai_keep_alive", "hard_max_positions",
                 "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
                 "max_spread_sl_pct", "atr_timeframe", "strategy", "pullback_tp_r",
-                "pullback_session", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+                "pullback_session", "manual_tp_pips", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
                 "m15_min_bars", "m5_min_bars", "atr_period",
                 "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
                 "trailing_trigger_r", "trailing_atr_multiplier", "broker_sl_required",
