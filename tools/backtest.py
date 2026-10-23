@@ -76,6 +76,7 @@ class Params:
     entry_n: int = 50           # trend : canal d'entree (jours)
     exit_n: int = 20            # trend : canal de sortie (jours)
     sl_atr: float = 3.0         # trend : SL initial en ATR(20) journalier
+    invert: bool = False        # sens oppose au signal (option « Inverser » du robot)
 
 
 def baseline_params() -> Params:
@@ -119,6 +120,7 @@ def default_variants(base: Params) -> list:
         replace(base, name="ATR M15", atr_tf="M15"),
         replace(base, name="TP 3 ATR", atr_tp=3.0),
         replace(base, name="sans inversion", reversal=False),
+        replace(base, name="signaux inverses", invert=True),
     ]
 
 
@@ -132,6 +134,8 @@ def pullback_variants(base: Params) -> list:
         replace(pb, name="recul BE 1R", be_pull=1.0),
         replace(pb, name="recul 24h/24", session=False),
         replace(pb, name="recul spread 15%", max_spread_sl_pct=15.0),
+        replace(pb, name="recul INVERSE", invert=True),
+        replace(pb, name="recul INVERSE BE 1R", invert=True, be_pull=1.0),
     ]
 
 
@@ -369,6 +373,8 @@ def simulate_symbol(sd: SymbolData, p: Params, extra_spread: float) -> list:
                     continue
                 if p.mtf == "pullback" and not (t15 != -d and t5 == d and sd.m5_trend.at(j - 1) != d):
                     continue
+            if p.invert:
+                d = -d
             bid = m5["close"][j]
             entry = bid + spread if d > 0 else bid
             pos = {"dir": d, "t": t_close, "entry": entry, "risk": sl_dist,
@@ -415,8 +421,11 @@ def simulate_pullback(sd: SymbolData, p: Params, extra_spread: float) -> list:
                 if sp.stop_distance_ok(entry, sig["stop"], sig["atr"], d):
                     dist = (entry - sig["stop"]) * d
                     if spread_pts <= p.max_spread_points and spread / dist * 100 <= p.max_spread_sl_pct:
+                        if p.invert:
+                            d = -d
+                            entry = bid + spread if d > 0 else bid
                         pos = {"dir": d, "t": int(m5t[j0]), "entry": entry, "risk": dist,
-                               "sl": sig["stop"], "tp": entry + d * p.tp_r * dist}
+                               "sl": entry - d * dist, "tp": entry + d * p.tp_r * dist}
 
         for j in range(j0, j1):
             if pos is None:

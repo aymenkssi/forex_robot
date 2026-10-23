@@ -157,6 +157,8 @@ CONFIG = {
     "pullback_session": True,
     # TP fixe en pips pour les ouvertures automatiques (0 = TP de la strategie).
     "manual_tp_pips": 0.0,
+    # Ouvre la position dans le sens oppose au signal de la strategie (BUY <-> SELL).
+    "invert_signals": False,
     "max_drawdown_new_trades_pct": 5.0,
     "auto_stop_drawdown_pct": 8.0,
     "m15_min_bars": 60,
@@ -210,7 +212,7 @@ PERSISTENT_CONFIG_KEYS = {
     "news_after_minutes", "risk_per_trade_pct", "daily_loss_limit_pct",
     "close_on_reversal", "reversal_min_score", "reversal_min_hold_minutes",
     "block_rollover", "recommended_version", "atr_timeframe",
-    "strategy", "pullback_tp_r", "pullback_session", "manual_tp_pips",
+    "strategy", "pullback_tp_r", "pullback_session", "manual_tp_pips", "invert_signals",
     "telegram_bot_token", "telegram_chat_id", "telegram_enabled",
     "telegram_on_open", "telegram_on_close", "telegram_on_target",
     "telegram_on_stoploss", "telegram_on_analysis",
@@ -349,7 +351,7 @@ def _apply_config_values(saved: dict) -> None:
         elif key in {
             "use_ai_analysis", "telegram_enabled",
             "broker_sl_required", "close_on_reversal", "block_rollover", "pullback_session",
-            "telegram_on_open", "telegram_on_close",
+            "invert_signals", "telegram_on_open", "telegram_on_close",
             "telegram_on_target", "telegram_on_stoploss",
             "telegram_on_analysis"
         }:
@@ -1050,7 +1052,9 @@ def pullback_cycle(account, portfolio: Dict, positions: list, events: list) -> N
         sig = pullback_live_signal(symbol)
         if not sig:
             continue
-        action = "BUY" if sig["dir"] > 0 else "SELL"
+        invert = bool(runtime_cfg("invert_signals", False))
+        traded_dir = -sig["dir"] if invert else sig["dir"]
+        action = "BUY" if traded_dir > 0 else "SELL"
         checks = [daily_loss_allows(account), trading_session_allows(),
                   economic_news_allows_trade(events, symbol), trade_cooldown_allows(symbol),
                   currency_exposure_allows(symbol, action, portfolio.get("currency_exposure", {}))]
@@ -1071,6 +1075,12 @@ def pullback_cycle(account, portfolio: Dict, positions: list, events: list) -> N
             print(f"  -> {symbol} {action}: RISK REFUS | SL hors 0,8-3 ATR")
             continue
         dist = (entry - sig["stop"]) * d
+        stop = sig["stop"]
+        if invert:
+            # Sens inverse : memes distances (SL a 1R, TP a tp_r R) de l'autre cote.
+            d = traded_dir
+            entry = float(tick.ask if d > 0 else tick.bid)
+            stop = entry - d * dist
         point = float(getattr(info, "point", 0) or 0)
         spread = float(tick.ask) - float(tick.bid)
         spread_pct = spread / dist * 100
@@ -1085,9 +1095,9 @@ def pullback_cycle(account, portfolio: Dict, positions: list, events: list) -> N
         tp = entry + d * float(runtime_cfg("pullback_tp_r", 2.0)) * dist
         ticket = open_trade(
             symbol, action, f"{PULLBACK_COMMENT}{dist:.{digits}f}",
-            sl_price=round(sig["stop"], digits), tp_price=round(tp, digits),
+            sl_price=round(stop, digits), tp_price=round(tp, digits),
         )
-        print(f"  -> {symbol} {action} PULLBACK | SL={sig['stop']:.{digits}f} TP={tp:.{digits}f} "
+        print(f"  -> {symbol} {action} PULLBACK{' INVERSE' if invert else ''} | SL={stop:.{digits}f} TP={tp:.{digits}f} "
               f"| spread {spread_pct:.0f}% du SL | {'OUVERT' if ticket else 'ECHEC'}")
         if ticket:
             open_symbols.add(symbol)
@@ -1930,6 +1940,9 @@ def auto_trader_loop():
                         # essayer plusieurs IA dans le meme cycle.
                         break
 
+                    if runtime_cfg("invert_signals", False):
+                        # Option « Inverser » : sens oppose a la decision de la strategie.
+                        action = "SELL" if action == "BUY" else "BUY"
                     ticket = open_trade(
                         symbol,
                         action,
@@ -2386,6 +2399,7 @@ async def api_get_config():
             "pullback_tp_r": CONFIG["pullback_tp_r"],
             "pullback_session": CONFIG["pullback_session"],
             "manual_tp_pips": CONFIG["manual_tp_pips"],
+            "invert_signals": CONFIG["invert_signals"],
             "max_drawdown_new_trades_pct": CONFIG["max_drawdown_new_trades_pct"],
             "auto_stop_drawdown_pct": CONFIG["auto_stop_drawdown_pct"],
             "m15_min_bars": CONFIG["m15_min_bars"],
@@ -2445,6 +2459,7 @@ async def api_update_config(body: dict):
         "pullback_tp_r": "pullback_tp_r",
         "pullback_session": "pullback_session",
         "manual_tp_pips": "manual_tp_pips",
+        "invert_signals": "invert_signals",
         "max_drawdown_new_trades_pct": "max_drawdown_new_trades_pct",
         "auto_stop_drawdown_pct": "auto_stop_drawdown_pct",
         "m15_min_bars": "m15_min_bars",
@@ -2491,7 +2506,7 @@ async def api_update_config(body: dict):
         "max_spread_sl_pct", "pullback_tp_r", "manual_tp_pips",
     }
     bool_keys = {"broker_sl_required", "use_ai_analysis", "close_on_reversal", "block_rollover",
-                 "pullback_session"}
+                 "pullback_session", "invert_signals"}
 
     for frontend_key, config_key in direct_keys.items():
         if frontend_key not in body:
@@ -2599,7 +2614,7 @@ async def api_update_config(body: dict):
                 "ai_full_timeout", "ai_keep_alive", "hard_max_positions",
                 "max_currency_exposure", "trade_cooldown_minutes", "max_spread_points",
                 "max_spread_sl_pct", "atr_timeframe", "strategy", "pullback_tp_r",
-                "pullback_session", "manual_tp_pips", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
+                "pullback_session", "manual_tp_pips", "invert_signals", "max_drawdown_new_trades_pct", "auto_stop_drawdown_pct",
                 "m15_min_bars", "m5_min_bars", "atr_period",
                 "atr_sl_multiplier", "atr_tp_multiplier", "breakeven_trigger_r",
                 "trailing_trigger_r", "trailing_atr_multiplier", "broker_sl_required",

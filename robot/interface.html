@@ -470,6 +470,7 @@
                     <h4 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-line text-green-400"></i>Trading</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div><label class="block text-gray-400 text-sm mb-2">Stratégie automatique</label><select id="setting-strategy" class="input-dark mono"><option value="pullback">Recul dans la tendance (H4/H1)</option><option value="score">Score technique (historique)</option></select><p class="text-gray-600 text-xs mt-1">Backtest : aucune n'est gagnante ; le recul est la moins perdante</p></div>
+                        <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">Inverser les signaux</div><div class="text-xs text-yellow-500">Coché : le robot ouvre SELL quand la stratégie dit BUY, et inversement</div></div><input type="checkbox" id="setting-invert" class="w-5 h-5 rounded"></div>
                         <div><label class="block text-gray-400 text-sm mb-2">TP fixe (pips)</label><input type="number" id="setting-tp-pips" step="1" min="0" max="2000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = TP de la stratégie (2R) ; sinon TP à X pips de l'entrée</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Lot maximum par trade</label><input type="number" id="setting-lot" step="0.01" min="0.01" max="10" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond : le lot réel est calculé selon le risque par trade</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Objectif Profit ($)</label><input type="number" id="setting-target" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (recommandé : TP/trailing ATR). Ignoré s'il est inférieur au risque par trade</p></div>
@@ -1222,6 +1223,7 @@
                 setField('setting-news-blackout', cfg.news_blackout_minutes);
                 setCheck('setting-broker-sl', cfg.broker_sl_required);
                 setField('setting-tp-pips', cfg.manual_tp_pips ?? 0);
+                setCheck('setting-invert', cfg.invert_signals);
                 setField('setting-news-after', cfg.news_after_minutes);
                 setField('setting-risk-pct', cfg.risk_per_trade_pct);
                 setField('setting-daily-loss', cfg.daily_loss_limit_pct);
@@ -1700,6 +1702,7 @@
                 news_blackout_minutes: parseInt(document.getElementById('setting-news-blackout').value),
                 broker_sl_required: document.getElementById('setting-broker-sl').checked,
                 manual_tp_pips: parseFloat(document.getElementById('setting-tp-pips').value),
+                invert_signals: document.getElementById('setting-invert').checked,
                 news_after_minutes: parseInt(document.getElementById('setting-news-after').value),
                 risk_per_trade_pct: parseFloat(document.getElementById('setting-risk-pct').value),
                 daily_loss_limit_pct: parseFloat(document.getElementById('setting-daily-loss').value),
