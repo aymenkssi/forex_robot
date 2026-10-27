@@ -481,6 +481,11 @@ state = {
 
 # ============ FASTAPI ============
 app = FastAPI(title="Forex Robot Pro - Ubuntu Edition v7 Risk Engine")
+
+
+@app.on_event("startup")
+def start_money_exit_watcher():
+    threading.Thread(target=money_exit_watcher, daemon=True, name="money-exit-watcher").start()
 api_router = APIRouter(prefix="/api")
 
 app.add_middleware(
@@ -1767,29 +1772,51 @@ def reversal_requires_close(pos) -> tuple[bool, str]:
     return False, ""
 
 
+def money_exit(pos) -> bool:
+    """Ferme la position si l'objectif $ ou le stop logique $ est atteint.
+
+    L'objectif est applique tel que configure. S'il est inferieur au risque pris
+    par trade, le ratio gain/perte devient defavorable (signale dans l'interface).
+    """
+    profit = float(getattr(pos, "profit", 0.0) or 0.0)
+    target = float(CONFIG.get("target_profit", 0) or 0)
+    stop = float(CONFIG.get("stop_loss", 0) or 0)
+    if target > 0 and profit >= target:
+        print(f"  TARGET {pos.symbol}: +${profit:.2f} -> fermeture")
+        if close_position(pos.ticket) and CONFIG.get("telegram_on_target"):
+            send_telegram(f"<b>OBJECTIF ATTEINT!</b>\n{pos.symbol} | Profit: <b>+${profit:.2f}</b>")
+        return True
+    if stop > 0 and profit <= -stop:
+        print(f"  STOP LOGIQUE {pos.symbol}: ${profit:.2f} -> fermeture")
+        if close_position(pos.ticket) and CONFIG.get("telegram_on_stoploss"):
+            send_telegram(f"<b>STOP LOSS LOGIQUE</b>\n{pos.symbol} | Perte: <b>${profit:.2f}</b>")
+        return True
+    return False
+
+
+def money_exit_watcher(interval: float = 2.0) -> None:
+    """Surveille l'objectif/stop $ toutes les 2 s, auto-trading actif ou non.
+
+    Le cycle de l'auto-trader (30 s et plus) pouvait laisser passer un pic de profit.
+    """
+    while True:
+        try:
+            target = float(CONFIG.get("target_profit", 0) or 0)
+            stop = float(CONFIG.get("stop_loss", 0) or 0)
+            if (target > 0 or stop > 0) and state.get("connected"):
+                for pos in list(mt5.positions_get() or []):
+                    money_exit(pos)
+        except Exception as e:
+            logger.debug("Surveillance objectif $: %s", e)
+        time.sleep(interval)
+
+
 def manage_open_positions(positions: list, account=None):
     """Gere les objectifs, le stop logique, l'inversion et la protection BE/trailing."""
-    # Un objectif $ inferieur au risque pris recree un ratio gain/perte perdant :
-    # il n'est applique que s'il vaut au moins le risque par trade.
-    risk_money = 0.0
-    if account is not None:
-        risk_money = float(account.balance) * float(runtime_cfg("risk_per_trade_pct", RISK_PER_TRADE_PCT)) / 100.0
-    target = float(CONFIG.get("target_profit", 0) or 0)
-    target_active = target > 0 and target >= risk_money
     for pos in positions:
         try:
             profit = float(getattr(pos, "profit", 0.0) or 0.0)
-            if target_active and profit >= target:
-                print(f"  TARGET {pos.symbol}: +${profit:.2f} -> fermeture")
-                if CONFIG.get("telegram_on_target"):
-                    send_telegram(f"<b>OBJECTIF ATTEINT!</b>\\n{pos.symbol} | Profit: <b>+${profit:.2f}</b>")
-                close_position(pos.ticket)
-                continue
-            if (CONFIG.get("stop_loss") or 0) > 0 and profit <= -CONFIG["stop_loss"]:
-                print(f"  STOP LOGIQUE {pos.symbol}: ${profit:.2f} -> fermeture")
-                if CONFIG.get("telegram_on_stoploss"):
-                    send_telegram(f"<b>STOP LOSS LOGIQUE</b>\\n{pos.symbol} | Perte: <b>${profit:.2f}</b>")
-                close_position(pos.ticket)
+            if money_exit(pos):
                 continue
             reverse, reverse_reason = reversal_requires_close(pos)
             if reverse:

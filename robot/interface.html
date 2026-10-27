@@ -473,7 +473,7 @@
                         <div class="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"><div><div class="font-medium">Inverser les signaux</div><div class="text-xs text-yellow-500">Coché : le robot ouvre SELL quand la stratégie dit BUY, et inversement</div></div><input type="checkbox" id="setting-invert" class="w-5 h-5 rounded"></div>
                         <div><label class="block text-gray-400 text-sm mb-2">TP fixe (pips)</label><input type="number" id="setting-tp-pips" step="1" min="0" max="2000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = TP de la stratégie (2R) ; sinon TP à X pips de l'entrée</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Lot maximum par trade</label><input type="number" id="setting-lot" step="0.01" min="0.01" max="10" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Plafond : le lot réel est calculé selon le risque par trade</p></div>
-                        <div><label class="block text-gray-400 text-sm mb-2">Objectif Profit ($)</label><input type="number" id="setting-target" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (recommandé : TP/trailing ATR). Ignoré s'il est inférieur au risque par trade</p></div>
+                        <div><label class="block text-gray-400 text-sm mb-2">Objectif Profit ($)</label><input type="number" id="setting-target" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Fermeture dès que la position atteint ce gain (vérifié toutes les 2 s, auto-trading lancé ou non). 0 = désactivé</p><p id="target-risk-warning" class="hidden text-yellow-500 text-xs mt-1"></p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Stop Loss monétaire ($)</label><input type="number" id="setting-sl" step="0.5" min="0" max="100000" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">0 = désactivé (le SL broker ATR reste indépendant)</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Score minimum</label><input type="number" id="setting-score" min="1" max="10" step="1" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Score technique requis</p></div>
                         <div><label class="block text-gray-400 text-sm mb-2">Intervalle d'analyse (s)</label><input type="number" id="setting-interval" min="10" max="600" step="5" class="input-dark mono"><p class="text-gray-600 text-xs mt-1">Fréquence du cycle automatique</p></div>
@@ -1223,6 +1223,14 @@
                 setField('setting-news-blackout', cfg.news_blackout_minutes);
                 setCheck('setting-broker-sl', cfg.broker_sl_required);
                 setField('setting-tp-pips', cfg.manual_tp_pips ?? 0);
+                const warn = document.getElementById('target-risk-warning');
+                if (warn) {
+                    const risk = 1000 * Number(cfg.risk_per_trade_pct || 0) / 100;
+                    const target = Number(cfg.target_profit || 0);
+                    const show = target > 0 && cfg.broker_sl_required && target < risk;
+                    warn.textContent = show ? ('Objectif ' + target + ' $ inférieur au risque d\'un trade (~' + risk.toFixed(0) + ' $ pour 1 000 $) : chaque perte coûte plus qu\'un gain ne rapporte.') : '';
+                    warn.classList.toggle('hidden', !show);
+                }
                 setCheck('setting-invert', cfg.invert_signals);
                 setField('setting-news-after', cfg.news_after_minutes);
                 setField('setting-risk-pct', cfg.risk_per_trade_pct);
